@@ -14,46 +14,52 @@ function verdict(score: number): { label: string; cls: string } {
 }
 
 const CSS = `
-:root{--bg:#0b0f17;--panel:#111826;--panel2:#0e1420;--line:#1e293b;--txt:#e2e8f0;--mut:#94a3b8;--cy:#22d3ee;--am:#f59e0b;--rd:#ef4444;--gn:#34d399}
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+:root{--bg:#0F172A;--panel:rgba(27,35,54,.72);--panel2:#0e1420;--line:rgba(255,255,255,.09);--txt:#F8FAFC;--mut:#94A3B8;--cy:#22d3ee;--gn:#22C55E;--am:#f59e0b;--rd:#ef4444}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--txt);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5}
+body{background:radial-gradient(1200px 600px at 20% -10%,#16203a 0%,var(--bg) 55%) fixed,var(--bg);color:var(--txt);font-family:"Fira Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;min-height:100vh}
+.mono,h1,.score-num,.stat .v{font-family:"Fira Code",ui-monospace,SFMono-Regular,Menlo,monospace}
 .wrap{max-width:1060px;margin:0 auto;padding:2rem 1.25rem 4rem}
 .eyebrow{font-size:.72rem;letter-spacing:.22em;color:var(--cy);text-transform:uppercase;margin-bottom:.4rem}
-h1{font-size:1.65rem;line-height:1.25;font-weight:650;max-width:46rem}
+h1{font-size:1.65rem;line-height:1.25;font-weight:600;max-width:46rem;letter-spacing:-.01em}
 .meta{color:var(--mut);margin-top:.5rem;font-size:.92rem}
 .hero{display:grid;grid-template-columns:300px 1fr;gap:1rem;margin-top:1.6rem}
 @media(max-width:760px){.hero{grid-template-columns:1fr}}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem}
+.card{background:var(--panel);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 32px rgba(0,0,0,.35);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.card:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.45)}
 .gauge-card{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-.score-num{font-size:2.6rem;font-weight:750;font-variant-numeric:tabular-nums}
+.gauge-card:hover{transform:none}
+.score-num{font-size:2.6rem;font-weight:700;font-variant-numeric:tabular-nums}
 .verdict{margin-top:.35rem;font-size:.8rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.25rem .8rem;border-radius:999px}
-.verdict.good{color:var(--gn);background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.35)}
+.verdict.good{color:var(--gn);background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35)}
 .verdict.warn{color:var(--am);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35)}
 .verdict.bad{color:var(--rd);background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35)}
 .gauge-sub{color:var(--mut);font-size:.8rem;margin-top:.5rem;max-width:15rem}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
 @media(max-width:760px){.stats{grid-template-columns:1fr}}
 .stat .k{font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em}
-.stat .v{font-size:1.7rem;font-weight:700;margin-top:.2rem;font-variant-numeric:tabular-nums}
+.stat .v{font-size:1.7rem;font-weight:600;margin-top:.2rem;font-variant-numeric:tabular-nums}
 .stat .d{font-size:.82rem;color:var(--mut);margin-top:.15rem}
-h2.sec{font-size:1.05rem;margin:2rem 0 .8rem;display:flex;align-items:center;gap:.6rem}
+h2.sec{font-size:1.05rem;margin:2rem 0 .8rem;display:flex;align-items:center;gap:.6rem;font-weight:600}
 h2.sec::after{content:"";flex:1;height:1px;background:var(--line)}
-#graph{width:100%;height:460px;border-radius:12px;background:radial-gradient(ellipse at center,#0e1626 0%,#0b0f17 70%);cursor:grab;border:1px solid var(--line);display:block}
+#graph{width:100%;height:460px;border-radius:12px;background:radial-gradient(ellipse at center,#14203a 0%,#0b0f17 75%);cursor:grab;border:1px solid var(--line);display:block;touch-action:none}
+#graph:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
 .legend{display:flex;gap:1.2rem;flex-wrap:wrap;margin-top:.6rem;font-size:.82rem;color:var(--mut)}
 .dot{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;margin-right:.35rem;vertical-align:baseline}
-#tip{position:fixed;pointer-events:none;background:#0e1420;border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;font-size:.8rem;max-width:300px;display:none;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.5)}
-#tip .tt{font-weight:650;margin-bottom:.15rem}#tip .tm{color:var(--mut)}
+#tip{position:fixed;pointer-events:none;background:rgba(14,20,32,.95);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;font-size:.8rem;max-width:300px;display:none;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+#tip .tt{font-weight:600;margin-bottom:.15rem}#tip .tm{color:var(--mut)}
 .vrow{display:flex;align-items:center;gap:.7rem;margin:.4rem 0}
 .vlabel{width:16rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.86rem}
-.vtrack{flex:1;height:.65rem;background:var(--panel2);border-radius:99px;overflow:hidden}
-.vfill{height:100%;background:linear-gradient(90deg,#0ea5e9,var(--cy));border-radius:99px}
-.vval{width:3rem;text-align:right;color:var(--mut);font-size:.85rem;font-variant-numeric:tabular-nums}
+.vtrack{flex:1;height:.65rem;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden}
+.vfill{height:100%;background:linear-gradient(90deg,#16a34a,var(--gn));border-radius:99px;transition:width .6s ease}
+.vval{width:3rem;text-align:right;color:var(--mut);font-size:.85rem;font-variant-numeric:tabular-nums;font-family:"Fira Code",monospace}
 table{width:100%;border-collapse:collapse;font-size:.88rem}
 th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--line)}
 th{color:var(--mut);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}
+tbody tr{transition:background .15s ease}tbody tr:hover{background:rgba(255,255,255,.03)}
 .yrow{display:flex;align-items:center;gap:.6rem;margin:.22rem 0}
-.ylabel{width:3.4rem;color:var(--mut);font-size:.85rem;font-variant-numeric:tabular-nums}
-.ybar{height:.9rem;background:linear-gradient(90deg,#0ea5e9,var(--cy));border-radius:3px;min-width:2px}
+.ylabel{width:3.4rem;color:var(--mut);font-size:.85rem;font-variant-numeric:tabular-nums;font-family:"Fira Code",monospace}
+.ybar{height:.9rem;background:linear-gradient(90deg,#16a34a,var(--gn));border-radius:3px;min-width:2px}
 .yval{color:var(--mut);font-size:.85rem}
 .notes{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3)}
 .notes li{margin:.3rem 0 .3rem 1.1rem;font-size:.9rem}
@@ -64,7 +70,13 @@ ul.plain li:last-child{border-bottom:none}
 .tag.clique{color:var(--cy);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.35)}
 .foot{margin-top:2.5rem;color:var(--mut);font-size:.78rem;text-align:center}
 .method{font-size:.85rem;color:var(--mut)}
-.method code{color:var(--txt);background:var(--panel2);padding:.1rem .35rem;border-radius:4px;font-size:.8rem}
+.method code{color:var(--txt);background:rgba(255,255,255,.06);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;font-family:"Fira Code",monospace}
+a{color:var(--cy)}button{cursor:pointer}
+:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .card:hover{transform:none}
+}
 `;
 
 const GRAPH_JS = `
@@ -115,7 +127,9 @@ canvas.addEventListener('mousedown',function(e){var p=pos(e);
   for(var i=0;i<nodes.length;i++){var n=nodes[i],r=n.kind==='target'?15:8;
     if((n.x-p[0])*(n.x-p[0])+(n.y-p[1])*(n.y-p[1])<(r+8)*(r+8)){dragN=n;n.drag=true;n.mx=p[0];n.my=p[1];canvas.style.cursor='grabbing';break;}}});
 window.addEventListener('mouseup',function(){if(dragN){dragN.drag=false;dragN=null;}});
-(function loop(){for(var k=0;k<3;k++)tick();draw();requestAnimationFrame(loop);})();
+var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduced){for(var s=0;s<400;s++)tick();draw();}
+else{(function loop(){for(var k=0;k<3;k++)tick();draw();requestAnimationFrame(loop);})();}
 })();
 `;
 
@@ -185,7 +199,7 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
     <div class="k" style="font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.6rem">Cartel score</div>
     <svg width="150" height="150" viewBox="0 0 150 150">
       <circle cx="75" cy="75" r="62" fill="none" stroke="#1e293b" stroke-width="11"/>
-      <circle id="ring" cx="75" cy="75" r="62" fill="none" stroke="${v.cls === "good" ? "#34d399" : v.cls === "warn" ? "#f59e0b" : "#ef4444"}" stroke-width="11" stroke-linecap="round" stroke-dasharray="389.5" stroke-dashoffset="389.5" transform="rotate(-90 75 75)" style="transition:stroke-dashoffset 1.2s ease"/>
+      <circle id="ring" cx="75" cy="75" r="62" fill="none" stroke="${v.cls === "good" ? "#22C55E" : v.cls === "warn" ? "#f59e0b" : "#ef4444"}" stroke-width="11" stroke-linecap="round" stroke-dasharray="389.5" stroke-dashoffset="389.5" transform="rotate(-90 75 75)" style="transition:stroke-dashoffset 1.2s ease"/>
       <text x="75" y="82" text-anchor="middle" fill="#e2e8f0" font-size="30" font-weight="700">${report.cartelScore.toFixed(2)}</text>
     </svg>
     <div class="verdict ${v.cls}">${v.label}</div>
@@ -200,7 +214,7 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
 
 <h2 class="sec">Citation graph</h2>
 <div class="card">
-<canvas id="graph"></canvas>
+<canvas id="graph" tabindex="0" role="img" aria-label="Interactive citation graph. Center node is the target paper; surrounding nodes are citing papers."></canvas>
 <div class="legend">
 <span><span class="dot" style="background:#22d3ee"></span>target paper</span>
 <span><span class="dot" style="background:#475569"></span>citing paper</span>
