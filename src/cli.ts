@@ -1,43 +1,54 @@
-// CLI: npm run analyze -- "paper title" [--max 40]
-// Writes out/report.json and out/report.html.
-
+// CLI supports both live retrieval and offline re-analysis of saved bundles.
 import fs from "node:fs";
 import path from "node:path";
-import { resolvePaper, fetchCiters } from "./serpapi.js";
+import { resolvePaper, fetchCiters, type ScholarPaper } from "./serpapi.js";
 import { analyze } from "./analyze.js";
 import { renderDashboard } from "./report.js";
+import { interpret } from "./llm.js";
 
 async function main() {
   const args = process.argv.slice(2);
-  const query = args.find((a) => !a.startsWith("--"));
-  if (!query) {
-    console.error('Usage: npm run analyze -- "paper title" [--max 40]');
-    process.exit(1);
+  let query: string | undefined, from: string | undefined, max = 40, llm = false;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "--llm") llm = true;
+    else if (arg === "--from" || arg.startsWith("--from=")) from = arg.includes("=") ? arg.slice(7) : args[++i];
+    else if (arg === "--max" || arg.startsWith("--max=")) max = Number(arg.includes("=") ? arg.slice(6) : args[++i]);
+    else if (!arg.startsWith("--") && !query) query = arg;
+    else throw new Error(`Unknown argument: ${arg}`);
   }
-  const maxArg = args.find((a) => a.startsWith("--max"));
-  const max = maxArg ? Number(maxArg.split("=")[1] ?? args[args.indexOf(maxArg) + 1]) || 40 : 40;
-
-  console.log(`Resolving "${query}"…`);
-  const target = await resolvePaper(query);
-  console.log(`Found: ${target.title}`);
-  console.log(`  authors: ${target.rawAuthors || target.authors.join(", ") || "n/a"}`);
-  if (target.citedByTotal !== undefined) console.log(`  cited by: ~${target.citedByTotal}`);
-  if (!target.citedByClusterId) {
-    console.error("Could not find a cited-by cluster id for this paper. Try a more specific title.");
-    process.exit(1);
+  if ((!query && !from) || (query && from) || !Number.isInteger(max) || max < 5 || max > 100) {
+    throw new Error('Usage: npm run analyze -- "paper title" [--max 5..100] [--llm] OR npm run analyze -- --from out/report.json [--llm]');
   }
-
-  console.log(`Fetching up to ${max} citers…`);
-  const citers = await fetchCiters(target.citedByClusterId, max);
-  console.log(`Got ${citers.length} citers.`);
-
+  let target: ScholarPaper, citers: ScholarPaper[];
+  let sourceGeneratedAt: string | undefined;
+  if (from) {
+    const bundle = JSON.parse(fs.readFileSync(path.resolve(from), "utf8"));
+    if (!bundle.target?.title || !Array.isArray(bundle.citers)) throw new Error("Saved bundle must contain target and citers.");
+    target = bundle.target;
+    citers = bundle.citers;
+    sourceGeneratedAt = bundle.generatedAt;
+    console.log(`Re-analyzing ${citers.length} saved citers; no Scholar API calls.`);
+  } else {
+    console.log(`Resolving "${query}"…`);
+    target = await resolvePaper(query!);
+    if (!target.citedByClusterId) throw new Error("No cited-by data found. Try a more specific title.");
+    console.log(`Found: ${target.title}. Fetching up to ${max} citers…`);
+    citers = await fetchCiters(target.citedByClusterId, max);
+  }
   const report = analyze(target, citers);
+  if (llm) console.log("Requesting source-linked Groq interpretation (one bounded request)…");
+  const interpretation = await interpret(report, target, citers, llm);
+  const generatedAt = new Date();
   const outDir = path.join(process.cwd(), "out");
   fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify({ report, citers, target, generatedAt: new Date().toISOString() }, null, 2));
-  fs.writeFileSync(path.join(outDir, "report.html"), renderDashboard(report, citers));
-  console.log(`Wrote out/report.json and out/report.html`);
-  console.log(`Cartel score: ${report.cartelScore} | self-cite rate: ${report.selfCite.rate} | top venue share: ${report.venueConcentration.topVenueShare}`);
+  // Preserve the original evidence bundle when re-analyzing existing output.
+  const prefix = from ? "report-v2" : "report";
+  fs.writeFileSync(path.join(outDir, `${prefix}.json`), JSON.stringify({ report, interpretation, citers, target, generatedAt: generatedAt.toISOString(), ...(sourceGeneratedAt ? { sourceGeneratedAt } : {}) }, null, 2));
+  fs.writeFileSync(path.join(outDir, `${prefix}.html`), renderDashboard(report, citers, generatedAt, interpretation));
+  console.log(`Wrote out/${prefix}.json and out/${prefix}.html`);
+  console.log(`Sample anomaly index: ${report.anomalyScore ?? "N/A"} (unvalidated) | author-overlap pairs: ${report.authorOverlaps.length}`);
+  console.log(`AI: ${interpretation.status}${interpretation.message ? ` — ${interpretation.message}` : ""}`);
 }
 
 main().catch((e) => {

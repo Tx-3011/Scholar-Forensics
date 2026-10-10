@@ -2,12 +2,17 @@
 // Docs: https://serpapi.com/google-scholar-api
 // Only two operations the base needs: resolve a paper, page through its citers.
 
+import { loadEnv } from "./config.js";
+import { authorIdentity, type AuthorIdentity } from "./identity.js";
+
 export type ScholarPaper = {
   resultId: string;
   title: string;
   link?: string;
   authors: string[]; // normalized "surname" tokens, lowercase
   rawAuthors: string;
+  authorIdentities?: AuthorIdentity[];
+  authorListComplete?: boolean; // Scholar snippets generally do not guarantee completeness.
   year?: number;
   venue?: string;
   snippet?: string;
@@ -19,20 +24,8 @@ type Json = Record<string, unknown>;
 
 const ENDPOINT = "https://serpapi.com/search.json";
 
-import fs from "node:fs";
-import path from "node:path";
-
 function getKey(): string {
-  // Minimal .env support without a dependency.
-  try {
-    const envPath = path.join(process.cwd(), ".env");
-    if (fs.existsSync(envPath)) {
-      for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
-        const m = line.match(/^\s*SERPAPI_API_KEY\s*=\s*(.+?)\s*$/);
-        if (m && !process.env.SERPAPI_API_KEY) process.env.SERPAPI_API_KEY = m[1];
-      }
-    }
-  } catch { /* env optional */ }
+  loadEnv();
   const key = (process.env.SERPAPI_API_KEY ?? "").trim();
   if (!key) throw new Error("SERPAPI_API_KEY is not set. Put it in .env (see .env.example) or the environment.");
   return key;
@@ -55,25 +48,27 @@ function asRecord(v: unknown): Json {
   return v && typeof v === "object" ? (v as Json) : {};
 }
 
-function parseAuthors(item: Json): { authors: string[]; raw: string } {
+function parseAuthors(item: Json): { authors: string[]; raw: string; authorIdentities: AuthorIdentity[] } {
   const pub = asRecord(item.publication_info);
   // Prefer a structured authors array when present.
   const structured = (pub.authors ?? (item as Json).authors) as unknown;
   let raw = "";
+  let named: { name: string; id?: string }[] = [];
   if (Array.isArray(structured)) {
-    raw = structured.map((a) => (typeof a === "string" ? a : asRecord(a).name)).filter(Boolean).join(", ");
+    named = structured.map((a) => {
+      const record = asRecord(a);
+      return { name: typeof a === "string" ? a : String(record.name ?? ""), id: typeof record.author_id === "string" ? record.author_id : undefined };
+    }).filter((a) => a.name);
+    raw = named.map((a) => a.name).join(", ");
   }
   if (!raw) {
     const summary = typeof pub.summary === "string" ? pub.summary : "";
     // "A Smith, B Jones - Journal Name, 2021" -> author part is before " - "
     raw = summary.split(" - ")[0] ?? "";
+    named = raw.split(/[,;]/).map((name) => ({ name }));
   }
-  const authors = raw
-    .split(/[,;]/)
-    .map((a) => a.trim())
-    .filter(Boolean)
-    .map(normalizeAuthor);
-  return { authors, raw };
+  const authors = [...new Set(named.map((a) => normalizeAuthor(a.name)).filter(Boolean))];
+  return { authors, raw, authorIdentities: named.map((a) => authorIdentity(a.name, a.id)).filter((a): a is AuthorIdentity => !!a) };
 }
 
 /** "J. Smith" / "Smith, John" -> "smith" (surname token, lowercase). */
@@ -114,7 +109,7 @@ function parseCitedBy(item: Json): { total?: number; clusterId?: string } {
 }
 
 export function normalizePaper(item: Json): ScholarPaper {
-  const { authors, raw } = parseAuthors(item);
+  const { authors, raw, authorIdentities } = parseAuthors(item);
   const { year, venue } = parseYearVenue(item);
   const { total, clusterId } = parseCitedBy(item);
   return {
@@ -123,6 +118,8 @@ export function normalizePaper(item: Json): ScholarPaper {
     link: typeof (item as Json).link === "string" ? ((item as Json).link as string) : undefined,
     authors,
     rawAuthors: raw,
+    authorIdentities,
+    authorListComplete: false,
     year,
     venue,
     snippet: typeof (item as Json).snippet === "string" ? ((item as Json).snippet as string) : undefined,
@@ -154,5 +151,5 @@ export async function fetchCiters(clusterId: string, maxResults = 40): Promise<S
     if (citers.length >= maxResults) break;
     await new Promise((r) => setTimeout(r, 1200)); // be polite to the API
   }
-  return citers.slice(0, maxResults);
+  return [...new Map(citers.map((c) => [c.citedByClusterId ?? c.link ?? c.resultId, c])).values()].slice(0, maxResults);
 }

@@ -2,22 +2,40 @@
 // everything is inline so out/report.html works from file:// too.
 import type { ForensicsReport } from "./analyze.js";
 import type { ScholarPaper } from "./serpapi.js";
+import { normalizeVenue } from "./identity.js";
+import type { Interpretation } from "./llm.js";
+import { summarizeFinding } from "./finding.js";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function verdict(score: number): { label: string; cls: string } {
-  if (score >= 0.55) return { label: "Cartel-like", cls: "bad" };
-  if (score >= 0.3) return { label: "Worth a look", cls: "warn" };
-  return { label: "Organic spread", cls: "good" };
+function verdict(score: number | null): { label: string; cls: string } {
+  if (score === null) return { label: "Insufficient sample", cls: "warn" };
+  if (score >= 0.3) return { label: "Review sample signals", cls: "warn" };
+  return { label: "Unvalidated index", cls: "neutral" };
+}
+
+function safeUrl(url?: string): string | undefined {
+  try { const parsed = new URL(url ?? ""); return ["https:", "http:"].includes(parsed.protocol) ? esc(parsed.href) : undefined; } catch { return undefined; }
+}
+
+function renderInterpretation(ai?: Interpretation): string {
+  if (!ai) return "";
+  if (ai.status !== "completed") return `<h2 class="sec">AI interpretation</h2><div class="card"><p>${esc(ai.message ?? "AI unavailable.")}</p></div>`;
+  const sections = (["observations", "interpretations", "limitations", "nextSteps"] as const).map((key) => {
+    const label = { observations: "Reported observations", interpretations: "AI inferences — verify", limitations: "Limitations", nextSteps: "Suggested verification steps" }[key];
+    return `<h3 style="margin-top:1rem">${label}</h3><ul class="plain">${(ai[key] ?? []).map((claim) => `<li>${esc(claim.text)} ${claim.evidenceIds.map((id) => `<a href="#evidence-${esc(id)}">[${esc(id)}]</a>`).join(" ")}</li>`).join("")}</ul>`;
+  }).join("");
+  return `<h2 class="sec">AI interpretation</h2><div class="card"><p class="method">AI-generated · ${esc(ai.provider)} / ${esc(ai.model)} · ${esc(ai.generatedAt ?? "")}<br>Uses supplied metadata and search snippets only, not full papers or citation passages. References identify supplied evidence; they do not guarantee the inference is correct. No AI score or misconduct verdict.</p>${sections}
+  <details style="margin-top:1rem"><summary>Evidence catalog and provenance</summary><p class="method">Prompt: ${esc(ai.promptVersion ?? "")} · tokens: ${ai.usage?.promptTokens ?? 0} input / ${ai.usage?.completionTokens ?? 0} output</p>${(ai.evidence ?? []).map((e) => `<div id="evidence-${esc(e.id)}" style="margin-top:1rem"><strong>${esc(e.id)}: ${esc(e.title)}</strong>${safeUrl(e.url) ? ` · <a href="${safeUrl(e.url)}" target="_blank" rel="noopener noreferrer">Source</a>` : ""}<pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem">${esc(JSON.stringify(e.detail, null, 2))}</pre></div>`).join("")}</details></div>`;
 }
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
 :root{--bg:#0F172A;--panel:rgba(27,35,54,.72);--panel2:#0e1420;--line:rgba(255,255,255,.09);--txt:#F8FAFC;--mut:#94A3B8;--cy:#22d3ee;--gn:#22C55E;--am:#f59e0b;--rd:#ef4444}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:radial-gradient(1200px 600px at 20% -10%,#16203a 0%,var(--bg) 55%) fixed,var(--bg);color:var(--txt);font-family:"Fira Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;min-height:100vh}
+body{background:var(--bg);color:var(--txt);font-family:"Fira Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;min-height:100vh}
 .mono,h1,.score-num,.stat .v{font-family:"Fira Code",ui-monospace,SFMono-Regular,Menlo,monospace}
 .wrap{max-width:1060px;margin:0 auto;padding:2rem 1.25rem 4rem}
 .eyebrow{font-size:.72rem;letter-spacing:.22em;color:var(--cy);text-transform:uppercase;margin-bottom:.4rem}
@@ -70,6 +88,17 @@ ul.plain li:last-child{border-bottom:none}
 .tag.clique{color:var(--cy);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.35)}
 .foot{margin-top:2.5rem;color:var(--mut);font-size:.78rem;text-align:center}
 .method{font-size:.85rem;color:var(--mut)}
+.finding{isolation:isolate;background:#172334;border:1px solid #365066;border-left:5px solid var(--cy);border-radius:14px;margin-top:1.5rem;padding:1.6rem}
+.finding.attention{border-left-color:var(--am)}
+.finding .finding-label{color:var(--cy);font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;font-weight:600}
+.finding.attention .finding-label{color:#fbbf24}
+.finding h2{font-size:clamp(1.6rem,4vw,2.6rem);line-height:1.15;letter-spacing:-.03em;max-width:850px;margin:.65rem 0 1rem;text-wrap:balance}
+.finding p{max-width:850px}
+.finding-actions{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem}
+.finding-actions a{font-weight:600;font-size:.9rem}
+.finding-caveat{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--line);font-size:.85rem;color:#cbd5e1}
+.verdict.neutral{color:#cbd5e1;background:#1e293b;border:1px solid #475569}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--cy);outline-offset:4px}
 .method code{color:var(--txt);background:rgba(255,255,255,.06);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;font-family:"Fira Code",monospace}
 a{color:var(--cy)}button{cursor:pointer}
 :focus-visible{outline:2px solid var(--cy);outline-offset:2px}
@@ -119,7 +148,7 @@ canvas.addEventListener('mousemove',function(e){var p=pos(e),mx=p[0],my=p[1];
   hover=-1;for(var i=0;i<nodes.length;i++){var n=nodes[i],r=n.kind==='target'?15:8;
     if((n.x-mx)*(n.x-mx)+(n.y-my)*(n.y-my)<(r+6)*(r+6)){hover=i;break;}}
   if(hover>=0){var n2=nodes[hover];
-    tip.innerHTML='<div class="tt">'+n2.label.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</div><div class="tm">'+n2.sub+'</div>';
+    tip.replaceChildren();var title=document.createElement('div'),meta=document.createElement('div');title.className='tt';meta.className='tm';title.textContent=n2.label;meta.textContent=n2.sub;tip.append(title,meta);
     tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px';canvas.style.cursor='pointer';}
   else{tip.style.display='none';canvas.style.cursor='grab';}});
 canvas.addEventListener('mouseleave',function(){hover=-1;tip.style.display='none';if(dragN){dragN.drag=false;dragN=null;}});
@@ -133,37 +162,33 @@ else{(function loop(){for(var k=0;k<3;k++)tick();draw();requestAnimationFrame(lo
 })();
 `;
 
-export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[], generatedAt = new Date()): string {
+export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[], generatedAt = new Date(), ai?: Interpretation): string {
   const t = report.target;
-  const v = verdict(report.cartelScore);
+  const v = verdict(report.anomalyScore);
+  const finding = summarizeFinding(report, citers);
 
   // Graph data: node 0 = target; clique pairs linked.
-  const cliqueAuthors = new Set(report.authorCliques.flatMap((c) => c.authors));
+  const overlapPaperIds = new Set(report.authorOverlaps.flatMap((c) => c.paperIds));
   const nodes = [
     { label: t.title, sub: "target paper · " + t.authors.slice(0, 3).join(", "), kind: "target" },
     ...citers.map((c) => ({
       label: c.title,
       sub: (c.rawAuthors || c.authors.join(", ")).slice(0, 80) + (c.year ? " · " + c.year : ""),
       kind: "citer",
-      self: c.authors.some((a) => t.authors.includes(a)),
-      clique: c.authors.some((a) => cliqueAuthors.has(a)),
+      self: report.selfCite.paperIds.includes(c.resultId),
+      clique: overlapPaperIds.has(c.resultId),
     })),
   ];
   const links: [number, number, number, string][] = citers.map((_, i) => [0, i + 1, 190, "cite"] as [number, number, number, string]);
-  const seen = new Set<string>();
-  for (let i = 0; i < citers.length; i++) {
-    for (let j = i + 1; j < citers.length; j++) {
-      const shared = citers[i]!.authors.filter((a) => citers[j]!.authors.includes(a) && !t.authors.includes(a));
-      if (shared.length >= 2) {
-        const key = i + "-" + j;
-        if (!seen.has(key)) { seen.add(key); links.push([i + 1, j + 1, 90, "clique"]); }
-      }
-    }
+  for (const pair of report.authorOverlaps) {
+    const a = citers.findIndex((c) => c.resultId === pair.paperIds[0]);
+    const b = citers.findIndex((c) => c.resultId === pair.paperIds[1]);
+    if (a >= 0 && b >= 0) links.push([a + 1, b + 1, 90, "clique"]);
   }
 
   const venueRows = (() => {
     const m = new Map<string, number>();
-    for (const c of citers) { const k = (c.venue ?? "unknown venue").toLowerCase(); m.set(k, (m.get(k) ?? 0) + 1); }
+    for (const c of citers) { const k = normalizeVenue(c.venue); m.set(k, (m.get(k) ?? 0) + 1); }
     const top = Math.max(...m.values(), 1);
     return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([venue, count]) =>
       `<div class="vrow"><span class="vlabel">${esc(venue)}</span><div class="vtrack"><div class="vfill" style="width:${Math.round((count / top) * 100)}%"></div></div><span class="vval">${count}</span></div>`
@@ -175,12 +200,11 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
     `<div class="yrow"><span class="ylabel">${year}</span><div class="ybar" style="width:${Math.max(2, Math.round((count / maxYear) * 320))}px"></div><span class="yval">${count}</span></div>`
   ).join("");
 
-  const cliqueAuthorsSet = cliqueAuthors;
   const citerRows = citers.slice(0, 30).map((c) => {
-    const self = c.authors.some((a) => t.authors.includes(a));
-    const clq = c.authors.some((a) => cliqueAuthorsSet.has(a));
-    const tags = `${self ? '<span class="tag self">self-cite</span>' : ""}${clq ? '<span class="tag clique">clique</span>' : ""}`;
-    return `<tr><td>${esc(c.title)}${tags}</td><td>${esc((c.rawAuthors || c.authors.join(", ")).slice(0, 60))}</td><td>${c.year ?? "—"}</td><td>${esc((c.venue ?? "—").slice(0, 40))}</td></tr>`;
+    const self = report.selfCite.paperIds.includes(c.resultId);
+    const clq = overlapPaperIds.has(c.resultId);
+    const tags = `${self ? '<span class="tag self">candidate self-cite</span>' : ""}${clq ? '<span class="tag clique">author overlap</span>' : ""}`;
+    return `<tr><td>${safeUrl(c.link) ? `<a href="${safeUrl(c.link)}" target="_blank" rel="noopener noreferrer">${esc(c.title)}</a>` : esc(c.title)}${tags}</td><td>${esc(c.rawAuthors || c.authors.join(", "))}</td><td>${c.year ?? "—"}</td><td>${esc(normalizeVenue(c.venue))}</td></tr>`;
   }).join("");
 
   const selfCiteList = report.selfCite.papers.map((p) => `<li>${esc(p)}</li>`).join("");
@@ -190,59 +214,72 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Forensics — ${esc(t.title.slice(0, 60))}</title><style>${CSS}</style></head>
 <body><div class="wrap">
-<div class="eyebrow">Scholar citation forensics</div>
+<div class="eyebrow">Scholar citation-pattern explorer</div>
 <h1>${esc(t.title)}</h1>
 <p class="meta">${esc(t.authors.join(", "))}${t.year ? " · " + t.year : ""}${t.venue ? " · " + esc(t.venue) : ""}${t.citedByTotal !== undefined ? ` · ~${t.citedByTotal.toLocaleString()} citations` : ""}</p>
 
+<section class="finding ${finding.tone}" aria-labelledby="finding-title">
+<div class="finding-label">Key finding · ${esc(finding.label)}</div>
+<h2 id="finding-title">${esc(finding.headline)}</h2>
+<p>${esc(finding.detail)}</p>
+<div class="finding-actions"><a href="#graph-section">Inspect author connections ↓</a><a href="#sources-section">Inspect publication sources ↓</a></div>
+<p class="finding-caveat">Measured in ${report.citersAnalyzed} first-returned Scholar records${report.evidenceQuality.coveragePercent !== null ? ` · ${report.evidenceQuality.coveragePercent.toFixed(2)}% of reported citations` : ""}. Not a misconduct verdict.${report.evidenceQuality.truncatedVenues ? ` ${report.evidenceQuality.truncatedVenues} venue labels are truncated; concentration is approximate.` : ""}${finding.duplicateGroups ? ` ${finding.duplicateGroups} repeated-title group(s) may be versions or duplicate records; verify before interpreting overlaps.` : ""}</p>
+</section>
+
+<div class="card notes" style="margin-top:1rem"><h2>Evidence quality — exploratory sample</h2><p><strong>${report.citersAnalyzed} analyzed${t.citedByTotal !== undefined ? ` / ~${t.citedByTotal.toLocaleString()} total` : ""}${report.evidenceQuality.coveragePercent !== null ? ` · ${report.evidenceQuality.coveragePercent.toFixed(4)}% coverage` : " · coverage unknown"}</strong></p><p class="method">${esc(report.evidenceQuality.sampling)}. No misconduct verdict.</p><details><summary>Sampling and metadata limitations</summary><ul>${report.evidenceQuality.warnings.map((warning) => `<li>${esc(warning)}</li>`).join("")}</ul><p class="method">Missing years: ${report.evidenceQuality.missingYears}. ${esc(report.evidenceQuality.authorMatching)}.</p></details></div>
+
 <div class="hero">
   <div class="card gauge-card">
-    <div class="k" style="font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.6rem">Cartel score</div>
+    <div class="k" style="font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.6rem">Sample anomaly index</div>
     <svg width="150" height="150" viewBox="0 0 150 150">
       <circle cx="75" cy="75" r="62" fill="none" stroke="#1e293b" stroke-width="11"/>
-      <circle id="ring" cx="75" cy="75" r="62" fill="none" stroke="${v.cls === "good" ? "#22C55E" : v.cls === "warn" ? "#f59e0b" : "#ef4444"}" stroke-width="11" stroke-linecap="round" stroke-dasharray="389.5" stroke-dashoffset="389.5" transform="rotate(-90 75 75)" style="transition:stroke-dashoffset 1.2s ease"/>
-      <text x="75" y="82" text-anchor="middle" fill="#e2e8f0" font-size="30" font-weight="700">${report.cartelScore.toFixed(2)}</text>
+      <circle id="ring" cx="75" cy="75" r="62" fill="none" stroke="#94a3b8" stroke-width="11" stroke-linecap="round" stroke-dasharray="389.5" stroke-dashoffset="389.5" transform="rotate(-90 75 75)"/>
+      <text x="75" y="82" text-anchor="middle" fill="#e2e8f0" font-size="30" font-weight="700">${report.anomalyScore === null ? "N/A" : report.anomalyScore.toFixed(3)}</text>
     </svg>
     <div class="verdict ${v.cls}">${v.label}</div>
-    <div class="gauge-sub">cartel score · 0 organic → 1 cartel-like</div>
+    <div class="gauge-sub">Unvalidated heuristic, 0–1. Not a probability, proof of wrongdoing, or evidence of innocence.</div>
   </div>
   <div class="stats">
-    <div class="card stat"><div class="k">Self-cite rate</div><div class="v">${Math.round(report.selfCite.rate * 100)}%</div><div class="d">${report.selfCite.count} of ${report.citersAnalyzed} citers share an author with the target</div></div>
-    <div class="card stat"><div class="k">Venue concentration</div><div class="v">${Math.round(report.venueConcentration.topVenueShare * 100)}%</div><div class="d">of citers in “${esc(report.venueConcentration.topVenue)}” · ${report.venueConcentration.distinctVenues} venues total</div></div>
-    <div class="card stat"><div class="k">Co-author cliques</div><div class="v">${report.authorCliques.length}</div><div class="d">citer groups sharing ≥2 authors across papers</div></div>
+    <div class="card stat"><div class="k">Candidate self-cites</div><div class="v">${Math.round(report.selfCite.rate * 100)}%</div><div class="d">${report.selfCite.count} of ${report.citersAnalyzed} citers have candidate author matches; incomplete lists may undercount</div></div>
+    <div class="card stat"><div class="k">Publication venue share</div><div class="v">${Math.round(report.venueConcentration.topVenueShare * 100)}%</div><div class="d">of all sampled citers in “${esc(report.venueConcentration.topVenue)}” · ${report.venueConcentration.excludedPapers} repository/unknown records excluded from concentration</div></div>
+    <div class="card stat"><div class="k">Author-overlap pairs</div><div class="v">${report.authorOverlaps.length}</div><div class="d">paper pairs sharing ≥2 candidate identities; not citation cliques</div></div>
   </div>
 </div>
 
-<h2 class="sec">Citation graph</h2>
+<h2 class="sec" id="graph-section">Citation graph</h2>
 <div class="card">
+<p class="method">Edges to the target are retrieved citations. Purple edges are candidate author overlaps, not citations between papers. The paper table provides text details.</p>
 <canvas id="graph" tabindex="0" role="img" aria-label="Interactive citation graph. Center node is the target paper; surrounding nodes are citing papers."></canvas>
 <div class="legend">
 <span><span class="dot" style="background:#22d3ee"></span>target paper</span>
 <span><span class="dot" style="background:#475569"></span>citing paper</span>
-<span><span class="dot" style="background:#f59e0b"></span>self-citation</span>
-<span><span class="dot" style="background:#a78bfa"></span>co-author clique</span>
+<span><span class="dot" style="background:#f59e0b"></span>candidate self-citation</span>
+<span><span class="dot" style="background:#a78bfa"></span>candidate author overlap</span>
 <span style="margin-left:auto">drag nodes · hover for details</span>
 </div></div>
 <div id="tip"></div>
 
-<h2 class="sec">Venues</h2>
+<h2 class="sec" id="sources-section">Publication sources (including repositories)</h2>
 <div class="card">${venueRows || "<p class='meta'>No venue data.</p>"}</div>
 
-<h2 class="sec">Citations by year</h2>
+<h2 class="sec">Sampled citing papers by publication year</h2>
 <div class="card">${yearBars || "<p class='meta'>No year data.</p>"}</div>
 
 <h2 class="sec">Citing papers${citers.length > 30 ? " (top 30)" : ""}</h2>
 <div class="card" style="overflow-x:auto"><table><tr><th>Title</th><th>Authors</th><th>Year</th><th>Venue</th></tr>${citerRows}</table></div>
 
-${report.selfCite.count ? `<h2 class="sec">Self-citations</h2><div class="card"><ul class="plain">${selfCiteList}</ul></div>` : ""}
+${report.selfCite.count ? `<h2 class="sec">Candidate self-citations</h2><div class="card"><ul class="plain">${selfCiteList}</ul></div>` : ""}
+
+${renderInterpretation(ai)}
 
 <div class="card notes"><h3 style="margin-bottom:.5rem">Analyst notes</h3><ul>${notes}</ul>
-<p class="method" style="margin-top:.8rem">Method: <code>cartel = 0.45·selfCite + 0.30·venueShare + 0.25·cliqueDensity</code>. Author matching is surname-based; venue parsing is heuristic. Signals, not verdicts.</p></div>
+<p class="method" style="margin-top:.8rem">Method v2: <code>index = 0.45·candidateSelfCiteRate + 0.30·publicationVenueShare + 0.25·overlapPairDensity</code>. Pair density divides all matching pairs by all possible pairs. arXiv/unknown sources do not raise concentration; the denominator is all sampled citers. Names/initials are candidate matches only. Weights are unvalidated; no index for samples under 10 or missing usable target/citer identities. Not comparable to the old cartel score.</p></div>
 
 <div class="foot">generated ${esc(generatedAt.toISOString())} · data: Google Scholar via SerpApi · sample of ${report.citersAnalyzed} citers</div>
 </div>
-<script>window.__NODES__=${JSON.stringify(nodes)};window.__LINKS__=${JSON.stringify(links)};</script>
+<script>window.__NODES__=${JSON.stringify(nodes).replace(/</g, "\\u003c")};window.__LINKS__=${JSON.stringify(links)};</script>
 <script>${GRAPH_JS}</script>
-<script>document.getElementById('ring').style.strokeDashoffset=(389.5*(1-${report.cartelScore})).toFixed(1);</script>
+<script>document.getElementById('ring').style.strokeDashoffset=(389.5*(1-${report.anomalyScore ?? 0})).toFixed(1);</script>
 </body></html>`;
 }
 
