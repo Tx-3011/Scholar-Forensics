@@ -11,12 +11,6 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function verdict(score: number | null): { label: string; cls: string } {
-  if (score === null) return { label: "Insufficient sample", cls: "warn" };
-  if (score >= 0.3) return { label: "Review sample signals", cls: "warn" };
-  return { label: "Unvalidated index", cls: "neutral" };
-}
-
 function safeUrl(url?: string): string | undefined {
   try { const parsed = new URL(url ?? ""); return ["https:", "http:"].includes(parsed.protocol) ? esc(parsed.href) : undefined; } catch { return undefined; }
 }
@@ -37,24 +31,14 @@ const CSS = `
 :root{--bg:#0F172A;--panel:rgba(27,35,54,.72);--panel2:#0e1420;--line:rgba(255,255,255,.09);--txt:#F8FAFC;--mut:#94A3B8;--cy:#22d3ee;--gn:#22C55E;--am:#f59e0b;--rd:#ef4444}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--txt);font-family:"Fira Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;min-height:100vh}
-.mono,h1,.score-num,.stat .v{font-family:"Fira Code",ui-monospace,SFMono-Regular,Menlo,monospace}
+.mono,h1,.stat .v{font-family:"Fira Code",ui-monospace,SFMono-Regular,Menlo,monospace}
 .wrap{max-width:1060px;margin:0 auto;padding:2rem 1.25rem 4rem}
 .eyebrow{font-size:.72rem;letter-spacing:.22em;color:var(--cy);text-transform:uppercase;margin-bottom:.4rem}
 h1{font-size:1.65rem;line-height:1.25;font-weight:600;max-width:46rem;letter-spacing:-.01em}
 .meta{color:var(--mut);margin-top:.5rem;font-size:.92rem}
-.hero{display:grid;grid-template-columns:300px 1fr;gap:1rem;margin-top:1.6rem}
-@media(max-width:760px){.hero{grid-template-columns:1fr}}
 .card{background:var(--panel);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 32px rgba(0,0,0,.35);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
 .card:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.45)}
-.gauge-card{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
-.gauge-card:hover{transform:none}
-.score-num{font-size:2.6rem;font-weight:700;font-variant-numeric:tabular-nums}
-.verdict{margin-top:.35rem;font-size:.8rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.25rem .8rem;border-radius:999px}
-.verdict.good{color:var(--gn);background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35)}
-.verdict.warn{color:var(--am);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35)}
-.verdict.bad{color:var(--rd);background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35)}
-.gauge-sub{color:var(--mut);font-size:.8rem;margin-top:.5rem;max-width:15rem}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.6rem}
 @media(max-width:760px){.stats{grid-template-columns:1fr}}
 .stat .k{font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em}
 .stat .v{font-size:1.7rem;font-weight:600;margin-top:.2rem;font-variant-numeric:tabular-nums}
@@ -225,7 +209,6 @@ resize();select(0);if(window.ResizeObserver){new ResizeObserver(resize).observe(
 export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[], generatedAt = new Date(), ai?: Interpretation): string {
   citers = citers.slice(0, 100);
   const t = report.target;
-  const v = verdict(report.anomalyScore);
   const finding = summarizeFinding(report, citers);
   const assessment = assess(report, report.integrity);
   const integrity = report.integrity;
@@ -319,25 +302,11 @@ ${finding.label === "Majority venue-label concentration" ? `<p class="method">A 
 ${finding.duplicateGroups ? `<details><summary>Possible duplicate records</summary><p>${finding.duplicateGroups} repeated-title group(s) may be versions or duplicate records; verify before interpreting overlaps.</p></details>` : ""}
 </section>
 
-<div class="card notes" style="margin-top:1rem"><h2>Evidence quality — exploratory sample</h2><p><strong>${report.citersAnalyzed} analyzed${t.citedByTotal !== undefined ? ` / ~${t.citedByTotal.toLocaleString()} total` : ""}${report.evidenceQuality.coveragePercent !== null ? ` · ${report.evidenceQuality.coveragePercent.toFixed(4)}% coverage` : " · coverage unknown"}</strong></p><p class="method">${esc(report.evidenceQuality.sampling)}. No misconduct verdict.</p><details><summary>Sampling and metadata limitations</summary><ul>${report.evidenceQuality.warnings.map((warning) => `<li>${esc(warning)}</li>`).join("")}</ul><p class="method">Missing years: ${report.evidenceQuality.missingYears}. ${esc(report.evidenceQuality.authorMatching)}.</p></details></div>
-
-<div class="hero">
-  <div class="card gauge-card">
-    <div class="k" style="font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.6rem">Sample anomaly index</div>
-    <svg width="150" height="150" viewBox="0 0 150 150">
-      <circle cx="75" cy="75" r="62" fill="none" stroke="#1e293b" stroke-width="11"/>
-      <circle id="ring" cx="75" cy="75" r="62" fill="none" stroke="#94a3b8" stroke-width="11" stroke-linecap="round" stroke-dasharray="389.5" stroke-dashoffset="389.5" transform="rotate(-90 75 75)"/>
-      <text x="75" y="82" text-anchor="middle" fill="#e2e8f0" font-size="30" font-weight="700">${report.anomalyScore === null ? "N/A" : report.anomalyScore.toFixed(3)}</text>
-    </svg>
-    <div class="verdict ${v.cls}">${v.label}</div>
-    <div class="gauge-sub">Unvalidated heuristic, 0–1. Not a probability, proof of wrongdoing, or evidence of innocence.</div>
-  </div>
   <div class="stats">
     <div class="card stat"><div class="k">Candidate self-cites</div><div class="v">${Math.round(report.selfCite.rate * 100)}%</div><div class="d">${report.selfCite.count} of ${report.citersAnalyzed} citers have candidate author matches; incomplete lists may undercount</div></div>
     <div class="card stat"><div class="k">Publication venue share</div><div class="v">${Math.round(report.venueConcentration.topVenueShare * 100)}%</div><div class="d">of all sampled citers in “${esc(report.venueConcentration.topVenue)}” · ${report.venueConcentration.excludedPapers} repository/unknown records excluded from concentration</div></div>
     <div class="card stat"><div class="k">Author-overlap pairs</div><div class="v">${report.authorOverlaps.length}</div><div class="d">paper pairs sharing ≥2 candidate identities; not citation cliques</div></div>
   </div>
-</div>
 
 <h2 class="sec" id="graph-section">Citation graph</h2>
 <section class="graph-shell" aria-label="Citation network explorer">
@@ -381,7 +350,6 @@ ${renderInterpretation(ai)}
 </div>
 <script>window.__NODES__=${JSON.stringify(nodes).replace(/</g, "\\u003c")};window.__LINKS__=${JSON.stringify(links)};</script>
 <script>${GRAPH_JS}</script>
-<script>document.getElementById('ring').style.strokeDashoffset=(389.5*(1-${report.anomalyScore ?? 0})).toFixed(1);</script>
 </body></html>`;
 }
 

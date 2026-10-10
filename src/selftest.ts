@@ -57,7 +57,7 @@ check("candidate overlap detected", report.authorOverlaps.length === 1 && report
 check("year histogram", report.yearHistogram.some((y) => y.year === 2019 && y.count === 2));
 check("small sample has no index", report.anomalyScore === null);
 check("overlap density uses possible paper pairs", report.overlapDensity === 1 / 15);
-check("html renders", renderDashboard(report, citers).includes("Sample anomaly index") && renderDashboard(report, citers).includes("Citation graph") && renderDashboard(report, citers).length > 5000);
+check("html renders without removed sections", !renderDashboard(report, citers).includes("Sample anomaly index") && !renderDashboard(report, citers).includes("Evidence quality — exploratory sample") && !renderDashboard(report, citers).includes("getElementById('ring')") && renderDashboard(report, citers).includes("Citation graph") && renderDashboard(report, citers).length > 5000);
 
 const normalize = (title: string, summary: string) => normalizePaper(citer(title, summary));
 const deepseek = normalize("DeepSeek", "A Liu, B Wang - arXiv preprint arXiv …, 2024");
@@ -93,7 +93,7 @@ check("overlap verdict does not imply reciprocal citations", summarizeFinding({ 
 const unmatchedReport = { ...manyReport, authorOverlaps: [], selfCite: { count: 0, rate: 0, papers: [], paperIds: [] }, venueConcentration: { ...manyReport.venueConcentration, topVenueShare: 0.1 } };
 check("no-match verdict does not declare innocence", summarizeFinding(unmatchedReport, many).verdict === "No author matches detected");
 check("self-citation verdict remains candidate-only", summarizeFinding({ ...unmatchedReport, selfCite: report.selfCite }, many).verdict === "Candidate self-citations found");
-check("sample verdict precedes secondary score and includes caveat", renderDashboard(majorityReport, many).indexOf('id="finding-title"') < renderDashboard(majorityReport, many).indexOf("Sample anomaly index") && renderDashboard(majorityReport, many).includes("Pattern finding, not a misconduct verdict."));
+check("sample verdict precedes statistics and includes caveat", renderDashboard(majorityReport, many).indexOf('id="finding-title"') < renderDashboard(majorityReport, many).indexOf('class="stats"') && renderDashboard(majorityReport, many).includes("Pattern finding, not a misconduct verdict."));
 const graphReport = analyze(target, [deepseek, yolo, vggt]);
 const graphHtml = renderDashboard(graphReport, [deepseek, yolo, vggt]);
 check("graph and table use exact pair membership", !graphHtml.includes('"clique":true') && !graphHtml.includes('90,"clique"'));
