@@ -1,6 +1,8 @@
 // Exploratory screening only: collaboration and concentration do not establish misconduct.
 import type { ScholarPaper } from "./serpapi.js";
 import { identities, normalizeVenue, sharedIdentities } from "./identity.js";
+import { assess } from "./assessment.js";
+import type { IntegrityEvidence } from "./integrity.js";
 
 export type ForensicsReport = {
   schemaVersion: 2;
@@ -14,9 +16,12 @@ export type ForensicsReport = {
   anomalyScore: number | null;
   evidenceQuality: { coveragePercent: number | null; sampling: string; authorMatching: string; unverifiedAuthorLists: number; missingAuthors: number; missingVenues: number; truncatedVenues: number; missingYears: number; warnings: string[] };
   notes: string[];
+  integrity?: IntegrityEvidence;
+  assessment?: ReturnType<typeof assess>;
 };
 
-export function analyze(target: ScholarPaper, citers: ScholarPaper[]): ForensicsReport {
+export function analyze(target: ScholarPaper, citers: ScholarPaper[], integrity?: IntegrityEvidence): ForensicsReport {
+  citers = citers.slice(0, 100);
   const n = citers.length;
   const selfCited = citers.filter((c) => sharedIdentities(target, c).length > 0);
   const authorOverlaps: ForensicsReport["authorOverlaps"] = [];
@@ -56,7 +61,7 @@ export function analyze(target: ScholarPaper, citers: ScholarPaper[]): Forensics
   if (n < 10) warnings.push("Fewer than 10 citers: insufficient evidence for an index.");
   const hasAuthorEvidence = identities(target).length > 0 && missingAuthors < n;
   if (n >= 10 && !hasAuthorEvidence) warnings.push("No usable target or citer author identities: no index can be computed reliably.");
-  return {
+  const report: ForensicsReport = {
     schemaVersion: 2,
     target: { title: target.title, authors: target.authors, year: target.year, venue: target.venue, citedByTotal: target.citedByTotal },
     citersAnalyzed: n,
@@ -68,5 +73,8 @@ export function analyze(target: ScholarPaper, citers: ScholarPaper[]): Forensics
     anomalyScore: n < 10 || !hasAuthorEvidence ? null : Math.round((0.45 * selfRate + 0.30 * venueShare + 0.25 * overlapDensity) * 1000) / 1000,
     evidenceQuality: { coveragePercent, sampling: "First returned Scholar results (non-random)", authorMatching: "Scholar IDs when both available; otherwise exact names/initials (candidate only)", unverifiedAuthorLists, missingAuthors, missingVenues, truncatedVenues, missingYears: citers.filter((c) => !c.year).length, warnings },
     notes: [n ? `Analyzed ${n}${target.citedByTotal !== undefined ? ` of ~${target.citedByTotal}` : ""} citations. Findings apply only to this retrieved sample.` : "No citing papers retrieved; no conclusion can be drawn.", "Year counts are publication years of sampled citers, not the target's annual citation totals."],
+    ...(integrity ? { integrity } : {}),
   };
+  report.assessment = assess(report, integrity);
+  return report;
 }

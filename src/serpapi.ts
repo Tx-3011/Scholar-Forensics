@@ -38,6 +38,12 @@ async function callSerpApi(params: Record<string, string>): Promise<Json> {
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = await fetch(url, { headers: { accept: "application/json" } });
   const payload = (await res.json()) as Json;
+  // SerpApi reports an exhausted Scholar page as an error, even on HTTP 200.
+  // Only this specific response means empty results; real API failures still throw.
+  if (res.ok && payload.error === "Google hasn't returned any results for this query." &&
+      (!Array.isArray(payload.organic_results) || payload.organic_results.length === 0)) {
+    return { ...payload, organic_results: [] };
+  }
   if (!res.ok || typeof payload.error === "string") {
     throw new Error(`SerpApi error: ${typeof payload.error === "string" ? payload.error : `HTTP ${res.status}`}`);
   }
@@ -132,7 +138,7 @@ export function normalizePaper(item: Json): ScholarPaper {
 export async function resolvePaper(query: string): Promise<ScholarPaper> {
   const payload = await callSerpApi({ q: query, num: "5" });
   const results = (payload.organic_results ?? []) as Json[];
-  if (!results.length) throw new Error(`No Scholar results for "${query}".`);
+  if (!results.length) throw new Error(`No Scholar paper found for "${query}". Enter the paper title, not its webpage or PDF link. Remove prefixes such as RETRACTED: and try again. This is a search failure, not a paper-quality result.`);
   return normalizePaper(results[0]!);
 }
 
@@ -140,7 +146,9 @@ export async function resolvePaper(query: string): Promise<ScholarPaper> {
  * Page through the "cited by" list of a Scholar cluster.
  * Stops at `maxResults` or when a page comes back empty.
  */
-export async function fetchCiters(clusterId: string, maxResults = 40): Promise<ScholarPaper[]> {
+export async function fetchCiters(clusterId: string, maxResults = 60): Promise<ScholarPaper[]> {
+  if (!Number.isFinite(maxResults) || maxResults < 1) throw new Error("Citation sample size must be a positive number.");
+  maxResults = Math.min(Math.trunc(maxResults), 100);
   const citers: ScholarPaper[] = [];
   const pageSize = 20;
   for (let start = 0; start < maxResults; start += pageSize) {

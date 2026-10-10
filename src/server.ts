@@ -9,6 +9,7 @@ import { analyze } from "./analyze.js";
 import { renderDashboard } from "./report.js";
 import { DEFAULT_MODEL, interpret } from "./llm.js";
 import { loadEnv } from "./config.js";
+import { collectIntegrity } from "./integrity.js";
 
 loadEnv();
 
@@ -33,17 +34,19 @@ function landing(error?: string): string {
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scholar Forensics</title><style>${PAGE_CSS}</style></head>
 <body><div class="wrap">
-<div class="eyebrow">Scholar citation-pattern explorer</div>
+<div class="eyebrow">Citation cartel screening</div>
 <h1>Look beyond citation counts.</h1>
-<p class="sub">Explore a bounded Google Scholar sample: candidate author overlaps, publication sources, and evidence limitations. Screening signals, not a misconduct verdict.</p>
+<p class="sub">Get an overall assessment backed by retraction records, reference-list concentration, and citation cycles between candidate author teams.</p>
 ${error ? `<div class="err">${escape(error)}</div>` : ""}
-<form method="POST" action="/analyze" onsubmit="document.getElementById('go').disabled=true;document.getElementById('go').textContent='Analyzing… (up to a minute)'">
+<form method="POST" action="/analyze" onsubmit="document.getElementById('go').disabled=true;document.getElementById('go').textContent='Checking citations and retractions…'">
 <label for="q">Paper title</label>
 <input type="text" id="q" name="q" placeholder="Attention Is All You Need" required autocomplete="off">
-<div class="row"><div><label for="max">Citer sample size (5–100, first returned results)</label><input type="number" id="max" name="max" value="40" min="5" max="100" required></div></div>
+<div class="row"><div><label for="max">Citer sample size (5–100, first returned results)</label><input type="number" id="max" name="max" value="60" min="5" max="100" required></div></div>
 <label for="llm"><input type="checkbox" id="llm" name="llm" value="1"> Include AI interpretation · Groq / ${escape(process.env.GROQ_MODEL?.trim() || DEFAULT_MODEL)}</label>
-<p class="hint">Optional: sends this sample's public paper metadata, snippets, and calculated metrics to Groq. One paid API request, at most 4,096 output tokens; input cost depends on sample size. No full papers or citation passages are read. AI cannot change the index.</p>
-<button id="go" type="submit">Explore citation patterns</button>
+<p class="hint">Optional: sends compact public metadata for up to 100 citers and calculated evidence to Groq. One paid request, with one smaller retry only for size or output truncation (at most two requests). No full papers or citation passages are read. AI cannot change the assessment.</p>
+<p class="hint">Default: 60 citers; hard cap: 100. Even highly cited papers get a sample assessment. Incomplete reference checks are reported separately.</p>
+<p class="hint">Includes a public Crossref metadata check: target, up to 20 sampled citers and 12 target references. No extra API key required. Sends public paper titles/DOIs; may add up to 45 seconds. Grades are screening signals, not proof of collusion.</p>
+<button id="go" type="submit">Assess this paper</button>
 </form>
 <p class="hint">Costs ~1 SerpApi search to resolve + ~1 per 20 citers. Keys stay server-side and are sent only to their respective API providers, never included in reports.</p>
 </div></body></html>`;
@@ -70,13 +73,13 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       const params = new URLSearchParams(body);
       const q = (params.get("q") ?? "").trim();
-      const max = Math.trunc(Math.min(Math.max(Number(params.get("max")) || 40, 5), 100));
+      const max = Math.trunc(Math.min(Math.max(Number(params.get("max")) || 60, 5), 100));
       if (!q) { res.writeHead(400, { "content-type": "text/html" }); res.end(landing("Enter a paper title.")); return; }
       try {
         const target = await resolvePaper(q);
-        if (!target.citedByClusterId) throw new Error("No cited-by data found for this paper — try a more specific title.");
-        const citers = await fetchCiters(target.citedByClusterId, max);
-        const report = analyze(target, citers);
+        const citers = target.citedByClusterId ? await fetchCiters(target.citedByClusterId, max) : [];
+        const integrity = await collectIntegrity(target, citers);
+        const report = analyze(target, citers, integrity);
         const interpretation = await interpret(report, target, citers, params.get("llm") === "1");
         const id = randomUUID().slice(0, 8);
         fs.mkdirSync(OUT, { recursive: true });
@@ -94,9 +97,10 @@ const server = http.createServer(async (req, res) => {
       const file = path.join(OUT, `${m[1]}.json`);
       if (!fs.existsSync(file)) { res.writeHead(404); res.end("Not found"); return; }
       const bundle = JSON.parse(fs.readFileSync(file, "utf8"));
+      bundle.citers = bundle.citers.slice(0, 100);
       res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
       // Recompute legacy bundles rather than presenting the obsolete surname-based score.
-      const report = bundle.report?.schemaVersion === 2 ? bundle.report : analyze(bundle.target, bundle.citers);
+      const report = analyze(bundle.target, bundle.citers, bundle.report?.integrity);
       res.end(renderDashboard(report, bundle.citers, new Date(bundle.generatedAt), bundle.interpretation));
       return;
     }

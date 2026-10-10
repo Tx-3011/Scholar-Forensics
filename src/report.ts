@@ -5,6 +5,7 @@ import type { ScholarPaper } from "./serpapi.js";
 import { normalizeVenue } from "./identity.js";
 import type { Interpretation } from "./llm.js";
 import { summarizeFinding } from "./finding.js";
+import { assess } from "./assessment.js";
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -27,7 +28,7 @@ function renderInterpretation(ai?: Interpretation): string {
     const label = { observations: "Reported observations", interpretations: "AI inferences — verify", limitations: "Limitations", nextSteps: "Suggested verification steps" }[key];
     return `<h3 style="margin-top:1rem">${label}</h3><ul class="plain">${(ai[key] ?? []).map((claim) => `<li>${esc(claim.text)} ${claim.evidenceIds.map((id) => `<a href="#evidence-${esc(id)}">[${esc(id)}]</a>`).join(" ")}</li>`).join("")}</ul>`;
   }).join("");
-  return `<h2 class="sec">AI interpretation</h2><div class="card"><p class="method">AI-generated · ${esc(ai.provider)} / ${esc(ai.model)} · ${esc(ai.generatedAt ?? "")}<br>Uses supplied metadata and search snippets only, not full papers or citation passages. References identify supplied evidence; they do not guarantee the inference is correct. No AI score or misconduct verdict.</p>${sections}
+  return `<h2 class="sec">AI interpretation</h2><div class="card"><p class="method">AI-generated · ${esc(ai.provider)} / ${esc(ai.model)} · ${esc(ai.generatedAt ?? "")}<br>Uses supplied metadata only, not full papers or citation passages. ${ai.requestInfo ? `Compact records for all ${ai.requestInfo.citationsSupplied} sampled citers · ${ai.requestInfo.attempts} request(s). ` : ""}References identify supplied evidence; they do not guarantee the inference is correct. No AI score or misconduct verdict.</p>${sections}
   <details style="margin-top:1rem"><summary>Evidence catalog and provenance</summary><p class="method">Prompt: ${esc(ai.promptVersion ?? "")} · tokens: ${ai.usage?.promptTokens ?? 0} input / ${ai.usage?.completionTokens ?? 0} output</p>${(ai.evidence ?? []).map((e) => `<div id="evidence-${esc(e.id)}" style="margin-top:1rem"><strong>${esc(e.id)}: ${esc(e.title)}</strong>${safeUrl(e.url) ? ` · <a href="${safeUrl(e.url)}" target="_blank" rel="noopener noreferrer">Source</a>` : ""}<pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem">${esc(JSON.stringify(e.detail, null, 2))}</pre></div>`).join("")}</details></div>`;
 }
 
@@ -112,6 +113,12 @@ ul.plain li:last-child{border-bottom:none}
 .method{font-size:.85rem;color:var(--mut)}
 .finding{isolation:isolate;background:#172334;border:1px solid #365066;border-left:5px solid var(--cy);border-radius:14px;margin-top:1.5rem;padding:1.6rem}
 .finding.attention{border-left-color:var(--am)}
+.finding.retracted,.finding.strong{border-left-color:#f87171;background:#291e2a}
+.finding.possible,.finding.review{border-left-color:var(--am)}
+.finding.fine{border-left-color:var(--gn)}
+.finding.insufficient{border-left-color:var(--mut)}
+.assessment-reasons{padding-left:1.25rem;margin:.8rem 0}.assessment-reasons li{margin:.5rem 0}
+.assessment-action{margin-top:1rem;font-weight:600}.check-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;margin-top:1rem}
 .finding .finding-label{color:var(--cy);font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;font-weight:600}
 .finding.attention .finding-label{color:#fbbf24}
 .finding h2{font-size:clamp(1.6rem,4vw,2.6rem);line-height:1.15;letter-spacing:-.03em;max-width:850px;margin:.65rem 0 1rem;text-wrap:balance}
@@ -216,9 +223,17 @@ resize();select(0);if(window.ResizeObserver){new ResizeObserver(resize).observe(
 `;
 
 export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[], generatedAt = new Date(), ai?: Interpretation): string {
+  citers = citers.slice(0, 100);
   const t = report.target;
   const v = verdict(report.anomalyScore);
   const finding = summarizeFinding(report, citers);
+  const assessment = assess(report, report.integrity);
+  const integrity = report.integrity;
+  const s = assessment.signals;
+  const workEdges = s.paperEdges.slice(0, 60).map((e) => {
+    const from = integrity?.works.find((w) => w.doi === e.from), to = integrity?.works.find((w) => w.doi === e.to);
+    return `<li><a href="${esc(`https://doi.org/${e.from}`)}" target="_blank" rel="noopener noreferrer">${esc(from?.title ?? e.from)}</a> cites <a href="${esc(`https://doi.org/${e.to}`)}" target="_blank" rel="noopener noreferrer">${esc(to?.title ?? e.to)}</a></li>`;
+  }).join("");
 
   // Graph data: node 0 = target; clique pairs linked.
   const overlapPaperIds = new Set(report.authorOverlaps.flatMap((c) => c.paperIds));
@@ -271,8 +286,29 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
 <h1>${esc(t.title)}</h1>
 <p class="meta">${esc(t.authors.join(", "))}${t.year ? " · " + t.year : ""}${t.venue ? " · " + esc(t.venue) : ""}${t.citedByTotal !== undefined ? ` · ~${t.citedByTotal.toLocaleString()} citations` : ""}</p>
 
+<section class="finding ${assessment.level}" aria-labelledby="assessment-title">
+<div class="finding-label">Overall assessment · ${assessment.basis === "sample" ? "sample only; reference checks incomplete" : "includes reference evidence"}</div>
+<h2 id="assessment-title">${esc(assessment.title)}</h2>
+<ul class="assessment-reasons">${assessment.reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>
+<p class="assessment-action">${esc(assessment.action)}</p>
+<p class="finding-caveat">${esc(assessment.caveat)}</p>
+<div class="finding-actions"><a href="#integrity-section">See retraction and reference evidence ↓</a><a href="#graph-section">Explore incoming citations ↓</a></div>
+</section>
+
+<h2 class="sec" id="integrity-section">Retraction and reference-network checks</h2>
+<div class="card">
+<p><strong>Metadata check: ${integrity ? esc(integrity.status) : "not run"}.</strong> ${integrity ? `Crossref · ${esc(integrity.checkedAt)} · ${integrity.requests} request(s)` : "Re-run this paper to retrieve reference and retraction evidence."}</p>
+<div class="check-grid">
+<div><strong>Retraction status</strong><p>${integrity ? esc(integrity.retraction.status) : "Unknown"}</p>${(integrity?.retraction.urls ?? []).filter((u) => safeUrl(u)).map((u) => `<p><a href="${safeUrl(u)}" target="_blank" rel="noopener noreferrer">${integrity?.targetDoi && u === `https://doi.org/${integrity.targetDoi}` ? "Original publisher record" : integrity?.retraction.status === "verified" ? "Retraction notice" : "Publisher record"} ↗</a></p>`).join("")}</div>
+<div><strong>Target reference list</strong><p>${s.depositedReferences} deposited / ${s.referenceCount} reported references. ${s.referenceVenueKnown} have journal labels.</p><p>${s.topReferenceVenue ? `${s.topReferenceVenueCount} references share “${esc(s.topReferenceVenue)}” (${Math.round(s.topReferenceVenueShare * 100)}% of reported references).` : "No usable reference-journal labels."}</p></div>
+<div><strong>Candidate author-team network</strong><p>${s.teamCount} teams across ${integrity?.works.length ?? 0} matched works. ${s.ringTeams} teams in the target-connected citation cycle; ${s.reciprocalPairs} reciprocal pair(s).</p><p>${integrity?.matchedCiters ?? 0} / ${integrity?.requestedCiters ?? 0} attempted citers matched. Coauthors merge into one team; this avoids counting normal collaboration as independent cartel participants.</p></div>
+</div>
+<details style="margin-top:1rem"><summary>Inspect deposited citation edges (${s.paperEdges.length})</summary><ul class="plain">${workEdges || "<li>No cross-team DOI citation edges could be established. Missing edges do not prove that no citations exist.</li>"}</ul>${s.paperEdges.length > 60 ? "<p>First 60 edges shown; all edges are exported in the evidence bundle.</p>" : ""}</details>
+<details style="margin-top:1rem"><summary>Assessment rules and limitations</summary><p>The overall assessment applies to at most 100 retrieved citers. A large total citation count or low percentage coverage never blocks a sample assessment. With ≥10 citers, usable target identities, usable author metadata for ≥80% of citers, and no threshold-level concern, the result is “Looks fine in the sampled citations”; incomplete reference/retraction checks remain disclosed separately.</p><p>Possible cartel requires a deposited citation cycle involving ≥3 candidate teams, including the target. Strong signals additionally require ≥50% directed edge density, ≥2 reciprocal pairs, and ≥50% of at least 10 target references sharing one journal label. A full-reference “Looks fine” result additionally requires a completed metadata check, ≥10 matched citers with usable reference/author evidence, usable target authors, and ≥10 target references with ≥80% deposited coverage. These thresholds are unvalidated.</p><p>Exact full-name or ORCID matches form candidate teams. Citation cycles do not establish coordinated intent or irrelevant citations. Citation passages and field baselines are not checked.</p><ul>${(integrity?.warnings ?? ["No reference-network evidence available."]).map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>
+</div>
+
 <section class="finding ${finding.tone}" aria-labelledby="finding-title">
-<div class="finding-label">Evidence-based verdict · retrieved sample only</div>
+<div class="finding-label">Supporting incoming-citation pattern · retrieved sample only</div>
 <h2 id="finding-title">${esc(finding.verdict)}</h2>
 <p class="finding-evidence">${esc(finding.headline)}</p>
 ${finding.label === "Majority venue-label concentration" ? `<p class="method">A venue label is the journal, conference, or publication source name shown by Scholar; shortened labels may group different sources together.</p>` : ""}

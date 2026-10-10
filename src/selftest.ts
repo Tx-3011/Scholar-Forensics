@@ -1,11 +1,12 @@
 // Offline self-test: validates normalization + analysis against
 // SerpApi-shaped fixtures. No API key needed.
-import { normalizePaper, normalizeAuthor } from "./serpapi.js";
+import "./integrity-selftest.js";
+import { normalizePaper, normalizeAuthor, resolvePaper, fetchCiters } from "./serpapi.js";
 import { analyze } from "./analyze.js";
 import { renderDashboard } from "./report.js";
 import { summarizeFinding } from "./finding.js";
 import { authorIdentity, identities, normalizeVenue, sharedIdentities } from "./identity.js";
-import { evidenceCatalog, interpret, validateClaims } from "./llm.js";
+import { compactPrompt, evidenceCatalog, interpret, validateClaims } from "./llm.js";
 
 let failures = 0;
 function check(name: string, cond: boolean) {
@@ -120,7 +121,7 @@ const mockFetch: typeof fetch = async (_url, init) => {
   requests++;
   const request = JSON.parse(String(init?.body));
   check("Groq model and strict schema configured", request.model === "openai/gpt-oss-120b" && request.response_format.json_schema.strict === true);
-  check("bounded request excludes AI score and keys from evidence", request.max_completion_tokens === 4096 && !request.messages[1].content.includes("test-key") && !request.messages[1].content.includes("anomalyScore"));
+  check("bounded request excludes AI score and keys from evidence", request.max_completion_tokens === 3072 && !request.messages[1].content.includes("test-key") && !request.messages[1].content.includes("anomalyScore"));
   return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(claims) } }], usage: { prompt_tokens: 100, completion_tokens: 200 } }));
 };
 const disabled = await interpret(report, target, citers, false, { apiKey: "test-key", fetcher: mockFetch });
@@ -140,6 +141,68 @@ const timeout: typeof fetch = async () => { throw new DOMException("timeout", "T
 check("timeout falls back safely", (await interpret(report, target, citers, true, { apiKey: "test-key", fetcher: timeout })).status === "unavailable");
 const truncated: typeof fetch = async () => new Response(JSON.stringify({ choices: [{ finish_reason: "length", message: { content: JSON.stringify(claims) } }] }));
 check("truncated completions rejected", (await interpret(report, target, citers, true, { apiKey: "test-key", fetcher: truncated })).status === "unavailable");
+
+const hundredCiters = Array.from({ length: 100 }, (_, i) => ({ ...citers[0]!, resultId: `large-${i}`, title: `${i} ${"Long title ".repeat(100)}`, rawAuthors: "Researcher Fullname ".repeat(100), snippet: "Do not send this oversized abstract ".repeat(1000) }));
+const hundredReport = analyze(target, hundredCiters);
+const hundredEvidence = evidenceCatalog(hundredReport, target, hundredCiters);
+const compact = compactPrompt(hundredEvidence);
+check("100-citer prompt bounded including schema", compact.promptBytes <= 14000 && compact.citationsSupplied === 100 && !JSON.stringify(compact.messages).includes("oversized abstract"));
+check("compact retry keeps all 100 citers", compactPrompt(hundredEvidence, 9000).citationsSupplied === 100);
+let boundedCalls = 0;
+const sizeRetry: typeof fetch = async (_url, init) => {
+  boundedCalls++;
+  const request = JSON.parse(String(init?.body));
+  const input = JSON.parse(request.messages[1].content);
+  check("AI sees every sampled citer on each attempt", input.papers.length === 101 && input.papers.some((p: string[]) => p[0] === "P100"));
+  if (boundedCalls === 1) return new Response("provider-private-body", { status: 413 });
+  return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(claims) } }] }));
+};
+const recoveredSize = await interpret(hundredReport, target, hundredCiters, true, { apiKey: "test-key", fetcher: sizeRetry });
+check("413 recovers with exactly one compact retry", recoveredSize.status === "completed" && recoveredSize.requestInfo?.attempts === 2 && recoveredSize.requestInfo.citationsSupplied === 100 && boundedCalls === 2);
+let lengthCalls = 0;
+const lengthRetry: typeof fetch = async () => new Response(JSON.stringify({ choices: [{ finish_reason: ++lengthCalls === 1 ? "length" : "stop", message: { content: JSON.stringify(claims) } }], usage: { prompt_tokens: 10, completion_tokens: 20 } }));
+const recoveredLength = await interpret(report, target, citers, true, { apiKey: "test-key", fetcher: lengthRetry });
+check("truncation retry accumulates actual token usage", recoveredLength.status === "completed" && lengthCalls === 2 && recoveredLength.usage?.completionTokens === 40);
+let persistentSizeCalls = 0;
+const persistentSize: typeof fetch = async () => { persistentSizeCalls++; return new Response("private", { status: 413 }); };
+check("size retries stop at two requests", (await interpret(hundredReport, target, hundredCiters, true, { apiKey: "test-key", fetcher: persistentSize })).failureKind === "size" && persistentSizeCalls === 2);
+
+// Retrieval regressions: empty citation pages must preserve prior results,
+// while authentication/rate-limit failures must remain errors.
+const originalFetch = globalThis.fetch;
+const originalSerpKey = process.env.SERPAPI_API_KEY;
+process.env.SERPAPI_API_KEY = "offline-test-key";
+try {
+  let scholarCalls = 0;
+  globalThis.fetch = async () => {
+    scholarCalls++;
+    return new Response(JSON.stringify(scholarCalls === 1
+      ? { organic_results: [targetRaw] }
+      : { error: "Google hasn't returned any results for this query." }));
+  };
+  const retained = await fetchCiters("cluster1", 40);
+  check("empty later Scholar page preserves retrieved citers", retained.length === 1 && scholarCalls === 2);
+  check("empty first Scholar citation page returns no citers", (await fetchCiters("cluster1", 40)).length === 0);
+  let searchMessage = "";
+  try { await resolvePaper("Missing paper"); } catch (e) { searchMessage = (e as Error).message; }
+  check("missing target explains title search and is not a quality result", searchMessage.includes("No Scholar paper found") && searchMessage.includes("not a paper-quality result"));
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: "Rate limit exceeded" }), { status: 429 });
+  let apiMessage = "";
+  try { await fetchCiters("cluster1", 40); } catch (e) { apiMessage = (e as Error).message; }
+  check("real Scholar API failures still throw", apiMessage.includes("Rate limit exceeded"));
+  let cappedPages = 0;
+  globalThis.fetch = async (url) => {
+    cappedPages++;
+    const start = Number(new URL(String(url)).searchParams.get("start"));
+    return new Response(JSON.stringify({ organic_results: Array.from({ length: 20 }, (_, i) => ({ ...targetRaw, result_id: `cap-${start + i}`, link: `https://example.com/cap-${start + i}`, inline_links: {} })) }));
+  };
+  const cappedCiters = await fetchCiters("cluster1", 200);
+  check("Scholar retrieval hard-caps at 100 and five pages", cappedCiters.length === 100 && cappedPages === 5);
+} finally {
+  globalThis.fetch = originalFetch;
+  if (originalSerpKey === undefined) delete process.env.SERPAPI_API_KEY;
+  else process.env.SERPAPI_API_KEY = originalSerpKey;
+}
 
 if (failures) {
   console.error(`${failures} check(s) failed`);
