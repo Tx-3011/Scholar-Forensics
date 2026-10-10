@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "name": "scholar-forensics",
+  "private": true,
+  "scripts": {
+    "analyze": "tsx src/cli.ts",
+    "test": "tsx src/selftest.ts",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx src/server.ts"
+  },
+  "type": "module",
+  "version": "0.1.0",
+  "devDependencies": {
+    "@types/node": "^26.6.5"
+  }
+}
