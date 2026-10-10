@@ -32,21 +32,24 @@ export function summarizeFinding(report: ForensicsReport, citers: ScholarPaper[]
   }
   const duplicateGroups = [...titles.values()].filter((count) => count > 1).length;
   const share = report.venueConcentration.topVenueShare;
-  let label = "Sample summary", headline = "No author-overlap pairs detected", detail = "This does not rule out citation manipulation. Outgoing references, reciprocal citations, and citation intent were not checked.", tone = "neutral";
+  let label = "Sample summary", verdict = "No author matches detected", headline = "No candidate self-citations or co-author overlap pairs found", detail = "Missing author metadata may hide matches. Citation intent and reciprocal citations were not checked.", tone = "neutral";
   if (report.anomalyScore === null) {
-    label = "Insufficient evidence"; headline = "Not enough usable evidence to summarize";
-    detail = "Retrieve at least 10 citers with usable target and citer author identities. Missing data cannot establish low risk.";
+    label = "Insufficient evidence"; verdict = "Insufficient evidence"; headline = "No reliable sample-level verdict available";
+    detail = "The sample has fewer than 10 citers or lacks usable author identities. Missing data does not mean low risk.";
   } else if (share >= 0.5) {
     label = "Majority venue-label concentration"; tone = "attention";
-    headline = `${Math.round(share * 100)}% of sampled citations share one venue label`;
-    detail = `${Math.round(share * report.citersAnalyzed)} of ${report.citersAnalyzed} records are labeled “${report.venueConcentration.topVenue}”. Shared reporting guidelines or journal policies may explain this; verify full venue names.`;
+    verdict = "Venue-label concentration found";
+    headline = `${Number((share * 100).toFixed(1))}% of sampled citations share one venue label`;
+    detail = `${Math.round(share * report.citersAnalyzed)} of ${report.citersAnalyzed} records share “${report.venueConcentration.topVenue}”. Journal policies or reporting guidelines may explain this pattern.`;
   } else if (clusterSize >= 2) {
     label = "Candidate collaboration pattern";
+    verdict = "Recurring author matches found";
     headline = `${clusterSize} papers connected by candidate author overlap`;
-    detail = `The largest connected component contains ${clusterPairs} matching paper pair${clusterPairs === 1 ? "" : "s"}. Connections mean shared names/IDs, not citations between these papers or confirmed coordination.`;
+    detail = `${clusterPairs} matching paper pair${clusterPairs === 1 ? "" : "s"} in the largest group. Shared names/IDs may reflect normal collaboration, not reciprocal citations.`;
   } else if (report.selfCite.count) {
-    headline = `${report.selfCite.count} candidate self-citation matches found`;
-    detail = "Candidate author matches can reflect legitimate self-citation; incomplete author lists may miss other matches.";
+    verdict = "Candidate self-citations found";
+    headline = `${report.selfCite.count} of ${report.citersAnalyzed} citers share a candidate target author`;
+    detail = "Self-citation can be legitimate. Name matches are not verified identities, and incomplete author lists may hide other matches.";
   }
-  return { label, headline, detail, tone, clusterSize, clusterPairs, duplicateGroups };
+  return { label, verdict, headline, detail, tone, clusterSize, clusterPairs, duplicateGroups };
 }

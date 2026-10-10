@@ -84,10 +84,15 @@ check("all matching pairs count, no top-five truncation", manyReport.authorOverl
 check("missing identities cannot produce low-risk index", analyze({ ...target, rawAuthors: "", authorIdentities: [] }, many).anomalyScore === null);
 check("local component is surfaced despite global pair dilution", summarizeFinding(manyReport, many).clusterSize === 12 && summarizeFinding(manyReport, many).clusterPairs === 66);
 const majorityReport = { ...manyReport, venueConcentration: { ...manyReport.venueConcentration, topVenueShare: 0.525 }, anomalyScore: 0.17 };
-check("majority venue headline is independent of small index", summarizeFinding(majorityReport, many).headline.startsWith("53%") && summarizeFinding(majorityReport, many).tone === "attention");
+check("majority venue headline is precise and independent of small index", summarizeFinding(majorityReport, many).headline.startsWith("52.5%") && summarizeFinding(majorityReport, many).verdict === "Venue-label concentration found" && summarizeFinding(majorityReport, many).tone === "attention");
 check("duplicate titles are disclosed without altering evidence", summarizeFinding(report, [deepseek, { ...deepseek, resultId: "version2" }]).duplicateGroups === 1);
 check("insufficient evidence takes precedence over venue share", summarizeFinding({ ...majorityReport, anomalyScore: null }, many).label === "Insufficient evidence");
 check("headline and accessible drill-down links render", renderDashboard(majorityReport, many).includes('id="finding-title"') && renderDashboard(majorityReport, many).includes('href="#sources-section"') && !renderDashboard(majorityReport, many).includes("LIMITED MEASURED SIGNALS"));
+check("overlap verdict does not imply reciprocal citations", summarizeFinding({ ...manyReport, venueConcentration: { ...manyReport.venueConcentration, topVenueShare: 0.1 } }, many).verdict === "Recurring author matches found");
+const unmatchedReport = { ...manyReport, authorOverlaps: [], selfCite: { count: 0, rate: 0, papers: [], paperIds: [] }, venueConcentration: { ...manyReport.venueConcentration, topVenueShare: 0.1 } };
+check("no-match verdict does not declare innocence", summarizeFinding(unmatchedReport, many).verdict === "No author matches detected");
+check("self-citation verdict remains candidate-only", summarizeFinding({ ...unmatchedReport, selfCite: report.selfCite }, many).verdict === "Candidate self-citations found");
+check("sample verdict precedes secondary score and includes caveat", renderDashboard(majorityReport, many).indexOf('id="finding-title"') < renderDashboard(majorityReport, many).indexOf("Sample anomaly index") && renderDashboard(majorityReport, many).includes("Pattern finding, not a misconduct verdict."));
 const graphReport = analyze(target, [deepseek, yolo, vggt]);
 const graphHtml = renderDashboard(graphReport, [deepseek, yolo, vggt]);
 check("graph and table use exact pair membership", !graphHtml.includes('"clique":true') && !graphHtml.includes('90,"clique"'));

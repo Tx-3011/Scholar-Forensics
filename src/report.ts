@@ -116,6 +116,10 @@ ul.plain li:last-child{border-bottom:none}
 .finding.attention .finding-label{color:#fbbf24}
 .finding h2{font-size:clamp(1.6rem,4vw,2.6rem);line-height:1.15;letter-spacing:-.03em;max-width:850px;margin:.65rem 0 1rem;text-wrap:balance}
 .finding p{max-width:850px}
+.finding .finding-evidence{font-size:1.15rem;font-weight:600;color:#e2e8f0;margin-bottom:.5rem}
+.finding-context{margin-top:.75rem;color:var(--mut);font-size:.82rem}
+.finding details{margin-top:.65rem;font-size:.85rem;color:#cbd5e1}
+@media(max-width:760px){.finding{padding:1.1rem;margin-top:1rem}.finding h2{font-size:1.75rem}.finding .finding-evidence{font-size:1rem}.finding-actions{gap:.5rem 1rem}}
 .finding-actions{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem}
 .finding-actions a{font-weight:600;font-size:.9rem}
 .finding-caveat{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--line);font-size:.85rem;color:#cbd5e1}
@@ -268,11 +272,15 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
 <p class="meta">${esc(t.authors.join(", "))}${t.year ? " · " + t.year : ""}${t.venue ? " · " + esc(t.venue) : ""}${t.citedByTotal !== undefined ? ` · ~${t.citedByTotal.toLocaleString()} citations` : ""}</p>
 
 <section class="finding ${finding.tone}" aria-labelledby="finding-title">
-<div class="finding-label">Key finding · ${esc(finding.label)}</div>
-<h2 id="finding-title">${esc(finding.headline)}</h2>
+<div class="finding-label">Evidence-based verdict · retrieved sample only</div>
+<h2 id="finding-title">${esc(finding.verdict)}</h2>
+<p class="finding-evidence">${esc(finding.headline)}</p>
+${finding.label === "Majority venue-label concentration" ? `<p class="method">A venue label is the journal, conference, or publication source name shown by Scholar; shortened labels may group different sources together.</p>` : ""}
 <p>${esc(finding.detail)}</p>
+<p class="finding-context">${report.citersAnalyzed} first-returned Scholar records${report.evidenceQuality.coveragePercent !== null ? ` · ${report.evidenceQuality.coveragePercent.toFixed(2)}% citation coverage` : " · citation coverage unknown"}</p>
+<p class="finding-caveat"><strong>Pattern finding, not a misconduct verdict.</strong> Non-random sample${report.evidenceQuality.truncatedVenues ? "; truncated venue labels make concentration approximate" : ""}.</p>
 <div class="finding-actions"><a href="#graph-section">Inspect author connections ↓</a><a href="#sources-section">Inspect publication sources ↓</a></div>
-<p class="finding-caveat">Measured in ${report.citersAnalyzed} first-returned Scholar records${report.evidenceQuality.coveragePercent !== null ? ` · ${report.evidenceQuality.coveragePercent.toFixed(2)}% of reported citations` : ""}. Not a misconduct verdict.${report.evidenceQuality.truncatedVenues ? ` ${report.evidenceQuality.truncatedVenues} venue labels are truncated; concentration is approximate.` : ""}${finding.duplicateGroups ? ` ${finding.duplicateGroups} repeated-title group(s) may be versions or duplicate records; verify before interpreting overlaps.` : ""}</p>
+${finding.duplicateGroups ? `<details><summary>Possible duplicate records</summary><p>${finding.duplicateGroups} repeated-title group(s) may be versions or duplicate records; verify before interpreting overlaps.</p></details>` : ""}
 </section>
 
 <div class="card notes" style="margin-top:1rem"><h2>Evidence quality — exploratory sample</h2><p><strong>${report.citersAnalyzed} analyzed${t.citedByTotal !== undefined ? ` / ~${t.citedByTotal.toLocaleString()} total` : ""}${report.evidenceQuality.coveragePercent !== null ? ` · ${report.evidenceQuality.coveragePercent.toFixed(4)}% coverage` : " · coverage unknown"}</strong></p><p class="method">${esc(report.evidenceQuality.sampling)}. No misconduct verdict.</p><details><summary>Sampling and metadata limitations</summary><ul>${report.evidenceQuality.warnings.map((warning) => `<li>${esc(warning)}</li>`).join("")}</ul><p class="method">Missing years: ${report.evidenceQuality.missingYears}. ${esc(report.evidenceQuality.authorMatching)}.</p></details></div>
