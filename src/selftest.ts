@@ -91,6 +91,11 @@ check("headline and accessible drill-down links render", renderDashboard(majorit
 const graphReport = analyze(target, [deepseek, yolo, vggt]);
 const graphHtml = renderDashboard(graphReport, [deepseek, yolo, vggt]);
 check("graph and table use exact pair membership", !graphHtml.includes('"clique":true') && !graphHtml.includes('90,"clique"'));
+check("graph includes inspector and accessible view controls", graphHtml.includes('id="graph-paper"') && graphHtml.includes('aria-label="Zoom in"') && graphHtml.includes('aria-live="polite"') && graphHtml.includes('id="graph-reset"'));
+check("graph explains dual signals and distinct edge meanings", graphHtml.includes('Both signals') && graphHtml.includes('Dashed purple edges are candidate author overlaps, not citations between papers'));
+check("graph settles without perpetual animation or random layout", !graphHtml.includes('requestAnimationFrame') && !graphHtml.includes('Math.random()'));
+const emptyGraphHtml = renderDashboard(empty, []);
+check("empty graph retains target and reports zero citers", emptyGraphHtml.includes('One paper. 0 citing connections.') && emptyGraphHtml.includes('No citing papers in this sample'));
 const hostile = { ...deepseek, title: '</script><script>alert("x")</script>', rawAuthors: "<img src=x onerror=alert(1)>", link: "javascript:alert(1)" };
 const hostileHtml = renderDashboard(analyze(target, [hostile]), [hostile]);
 check("untrusted HTML and script data escaped", !hostileHtml.includes(hostile.title) && !hostileHtml.includes('href="javascript:') && hostileHtml.includes("\\u003c/script>"));

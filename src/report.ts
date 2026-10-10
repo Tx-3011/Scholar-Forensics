@@ -60,12 +60,34 @@ h1{font-size:1.65rem;line-height:1.25;font-weight:600;max-width:46rem;letter-spa
 .stat .d{font-size:.82rem;color:var(--mut);margin-top:.15rem}
 h2.sec{font-size:1.05rem;margin:2rem 0 .8rem;display:flex;align-items:center;gap:.6rem;font-weight:600}
 h2.sec::after{content:"";flex:1;height:1px;background:var(--line)}
-#graph{width:100%;height:460px;border-radius:12px;background:radial-gradient(ellipse at center,#14203a 0%,#0b0f17 75%);cursor:grab;border:1px solid var(--line);display:block;touch-action:none}
-#graph:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
-.legend{display:flex;gap:1.2rem;flex-wrap:wrap;margin-top:.6rem;font-size:.82rem;color:var(--mut)}
-.dot{display:inline-block;width:.7rem;height:.7rem;border-radius:50%;margin-right:.35rem;vertical-align:baseline}
-#tip{position:fixed;pointer-events:none;background:rgba(14,20,32,.95);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:8px;padding:.55rem .7rem;font-size:.8rem;max-width:300px;display:none;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.5)}
-#tip .tt{font-weight:600;margin-bottom:.15rem}#tip .tm{color:var(--mut)}
+.graph-shell{isolation:isolate;border:1px solid #2b3a50;border-radius:16px;overflow:hidden;background:#111c2c}
+.graph-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid #2b3a50;flex-wrap:wrap}
+.graph-kicker{font-size:.68rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#91a6bf;margin-bottom:4px}
+.graph-toolbar h3{font-size:1.1rem;font-weight:500;letter-spacing:-.02em}
+.graph-counts{display:flex;gap:16px;font-size:.75rem;color:#91a6bf;font-variant-numeric:tabular-nums}.graph-counts strong{color:#dce7f3;font-weight:500}
+.graph-body{display:grid;grid-template-columns:minmax(0,1fr) 264px}
+.graph-stage{position:relative;min-width:0;background:#0e1725;isolation:isolate}
+#graph{width:100%;height:520px;cursor:grab;display:block;touch-action:none}
+#graph:focus-visible{outline:2px solid var(--cy);outline-offset:-4px}
+.graph-controls{position:absolute;bottom:20px;left:20px;display:flex;align-items:center;gap:4px;background:#172437;border:1px solid #34455d;border-radius:8px;padding:4px;z-index:1}
+.graph-controls button{background:transparent;border:0;color:#cfdeee;border-radius:4px;min-width:32px;height:32px;font-family:inherit;font-size:.85rem;font-weight:500;padding:0 8px;transition:background-color 150ms ease,color 150ms ease}
+.graph-controls button:hover{background:#2c4058;color:#f1f5f9}.graph-controls button:active{background:#385470}.graph-controls button:disabled{opacity:.35;cursor:not-allowed}
+.graph-controls output{font-size:.7rem;color:#9fb1c7;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
+.graph-hint{position:absolute;right:20px;bottom:32px;font-size:.68rem;color:#91a6bf;pointer-events:none}
+.graph-inspector{padding:24px;border-left:1px solid #2b3a50;background:#142032;overflow-wrap:anywhere}
+.graph-inspector label{display:block;font-size:.7rem;color:#9fb1c7;margin:16px 0 8px}
+.graph-inspector select{width:100%;min-height:36px;padding:8px;background:#1c2c41;color:#dce7f3;border:1px solid #3a4d65;border-radius:6px;font:inherit;font-size:.75rem;cursor:pointer}
+.graph-inspector select:hover{border-color:#69829e}
+.graph-badge{display:inline-block;border:1px solid #365e70;background:#193345;color:#7ddde9;padding:4px 8px;border-radius:4px;font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 12px}
+.graph-inspector h4{font-size:1rem;font-weight:500;line-height:1.5;letter-spacing:-.01em;margin-bottom:12px}
+.graph-inspector p{font-size:.78rem;color:#a7b8cb;line-height:1.6}
+.graph-relations{margin:24px 0;padding:16px 0;border-top:1px solid #2b3a50;border-bottom:1px solid #2b3a50}.graph-relations strong{display:block;font-size:1.5rem;font-weight:500;color:#e1ebf5;font-variant-numeric:tabular-nums}.graph-relations span{font-size:.72rem;color:#9fb1c7}
+.graph-inspector .graph-note{font-size:.7rem;color:#91a6bf}
+.legend{display:flex;gap:12px 20px;flex-wrap:wrap;padding:16px 24px;border-top:1px solid #2b3a50;font-size:.7rem;color:#a7b8cb}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:baseline}
+.legend-line{display:inline-block;width:16px;border-top:2px dashed #b5a0e8;margin-right:8px;vertical-align:middle}
+.graph-caption{margin-top:12px;font-size:.75rem;color:#9fb1c7;max-width:85ch}
+@media(max-width:760px){.graph-body{grid-template-columns:1fr}.graph-inspector{border-left:0;border-top:1px solid #2b3a50;padding:20px}.graph-toolbar{padding:20px}.graph-hint{display:none}#graph{height:420px}.graph-badge{margin-top:16px}.graph-relations{margin:16px 0;padding:12px 0}.legend{padding:16px 20px}}
 .vrow{display:flex;align-items:center;gap:.7rem;margin:.4rem 0}
 .vlabel{width:16rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.86rem}
 .vtrack{flex:1;height:.65rem;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden}
@@ -112,53 +134,80 @@ const GRAPH_JS = `
 (function(){
 var canvas=document.getElementById('graph');if(!canvas)return;
 var ctx=canvas.getContext('2d');
-var W,H,dpr=Math.min(window.devicePixelRatio||1,2);
-function resize(){W=canvas.clientWidth;H=canvas.clientHeight;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
-resize();window.addEventListener('resize',resize);
 var nodes=window.__NODES__,links=window.__LINKS__;
-var cx=W/2,cy=H/2;
-nodes.forEach(function(n,i){if(n.fx!==undefined)return;var a=(i/nodes.length)*Math.PI*2,r=n.kind==='target'?0:150+Math.random()*60;n.x=cx+Math.cos(a)*r;n.y=cy+Math.sin(a)*r;n.vx=0;n.vy=0;});
-var R=nodes[0].kind==='target'?16:9;
-function tick(){
-  for(var i=0;i<nodes.length;i++){var a=nodes[i];
-    for(var j=i+1;j<nodes.length;j++){var b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d2=dx*dx+dy*dy||1,d=Math.sqrt(d2);
-      var f=Math.min(9000/d2,4);a.vx+=dx/d*f;a.vy+=dy/d*f;b.vx-=dx/d*f;b.vy-=dy/d*f;}
-    a.vx+=(cx-a.x)*0.004;a.vy+=(cy-a.y)*0.004;}
-  links.forEach(function(l){var a=nodes[l[0]],b=nodes[l[1]],dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1;
-    var want=l[2]||170,f=(d-want)*0.02;a.vx+=dx/d*f;a.vy+=dy/d*f;b.vx-=dx/d*f;b.vy-=dy/d*f;});
-  nodes.forEach(function(n){if(n.drag){n.x=n.mx;n.y=n.my;n.vx=0;n.vy=0;return;}n.vx*=0.82;n.vy*=0.82;n.x+=n.vx;n.y+=n.vy;
-    n.x=Math.max(24,Math.min(W-24,n.x));n.y=Math.max(24,Math.min(H-24,n.y));});
+var W,H,dpr,zoom=1,panX=0,panY=0,hover=-1,selected=0,gesture=null;
+var picker=document.getElementById('graph-paper');
+nodes.forEach(function(n,i){var option=document.createElement('option');option.value=String(i);option.textContent=(i===0?'Target: ':'')+n.label;picker.append(option);});
+function layout(){
+  nodes.forEach(function(n,i){var a=(i-1)/Math.max(nodes.length-1,1)*Math.PI*2-Math.PI/2;
+    var r=Math.min(W,H)*(.32+(i%3)*.045);n.x=i?W/2+Math.cos(a)*r:W/2;n.y=i?H/2+Math.sin(a)*r:H/2;n.vx=0;n.vy=0;});
+  // Settle once, rather than continuously moving the diagram under the reader.
+  for(var step=0;step<240;step++){
+    for(var i=1;i<nodes.length;i++){var a=nodes[i];
+      for(var j=i+1;j<nodes.length;j++){var b=nodes[j],dx=a.x-b.x,dy=a.y-b.y,d=Math.sqrt(dx*dx+dy*dy)||1;
+        var f=Math.min(500/(d*d),2);a.vx+=dx/d*f;a.vy+=dy/d*f;b.vx-=dx/d*f;b.vy-=dy/d*f;}
+      var dx=a.x-W/2,dy=a.y-H/2,d=Math.sqrt(dx*dx+dy*dy)||1;
+      var f=(d-Math.min(W,H)*.34)*.015;a.vx-=dx/d*f;a.vy-=dy/d*f;
+    }
+    links.forEach(function(l){if(l[3]!=='clique')return;var a=nodes[l[0]],b=nodes[l[1]],dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1;
+      var f=(d-72)*.008;a.vx+=dx/d*f;a.vy+=dy/d*f;b.vx-=dx/d*f;b.vy-=dy/d*f;});
+    nodes.slice(1).forEach(function(n){n.vx*=.7;n.vy*=.7;n.x=Math.max(40,Math.min(W-40,n.x+n.vx));n.y=Math.max(48,Math.min(H-72,n.y+n.vy));});
+  }
 }
-function color(n){if(n.kind==='target')return '#22d3ee';if(n.self&&n.clique)return '#f472b6';if(n.self)return '#f59e0b';if(n.clique)return '#a78bfa';return '#475569';}
+function resize(){var oldW=W,oldH=H;W=canvas.clientWidth;H=canvas.clientHeight;dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=W*dpr;canvas.height=H*dpr;
+  if(oldW){nodes.forEach(function(n){n.x=n.x/oldW*W;n.y=n.y/oldH*H;});}else layout();draw();}
+function color(n){if(n.kind==='target')return '#67d5e5';if(n.self&&n.clique)return '#e9a4cb';if(n.self)return '#edb76c';if(n.clique)return '#b5a0e8';return '#91a9c3';}
+function screen(n){return [W/2+(n.x-W/2)*zoom+panX,H/2+(n.y-H/2)*zoom+panY];}
+function connected(i,focus){return i===focus||links.some(function(l){return (l[0]===focus&&l[1]===i)||(l[1]===focus&&l[0]===i);});}
+function label(text,x,y,max){ctx.font='11px "Fira Sans",system-ui';while(text.length>1&&ctx.measureText(text).width>max){text=text.slice(0,-2)+'…';}ctx.fillText(text,x,y);}
 function draw(){
-  ctx.clearRect(0,0,W,H);
-  links.forEach(function(l){var a=nodes[l[0]],b=nodes[l[1]];
-    ctx.strokeStyle=l[3]==='clique'?'rgba(167,139,250,.45)':'rgba(148,163,184,.14)';ctx.lineWidth=l[3]==='clique'?1.4:1;
-    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();});
-  nodes.forEach(function(n){var r=n.kind==='target'?15:8;
-    ctx.beginPath();ctx.arc(n.x,n.y,r,0,7);ctx.fillStyle=color(n);ctx.globalAlpha=n.kind==='target'?1:.92;ctx.fill();ctx.globalAlpha=1;
-    if(n.kind==='target'){ctx.strokeStyle='rgba(34,211,238,.5)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(n.x,n.y,r+5,0,7);ctx.stroke();}});
-  if(hover>=0){var n=nodes[hover];ctx.fillStyle='rgba(226,232,240,.85)';ctx.font='11px system-ui';ctx.textAlign='center';
-    var label=n.label.length>42?n.label.slice(0,42)+'…':n.label;ctx.fillText(label,n.x,Math.max(12,n.y-20));}
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#223044';for(var x=16;x<W;x+=24)for(var y=16;y<H;y+=24){ctx.beginPath();ctx.arc(x,y,.7,0,Math.PI*2);ctx.fill();}
+  var center=screen(nodes[0]);ctx.strokeStyle='#223044';ctx.lineWidth=1;ctx.setLineDash([3,7]);ctx.beginPath();ctx.arc(center[0],center[1],Math.min(W,H)*.34*zoom,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  var focus=hover>=0?hover:selected;
+  links.forEach(function(l){var a=screen(nodes[l[0]]),b=screen(nodes[l[1]]),overlap=l[3]==='clique',active=l[0]===focus||l[1]===focus;
+    ctx.globalAlpha=active?1:.25;ctx.strokeStyle=overlap?'#b5a0e8':(focus===0?'#3a5068':'#6c9bae');ctx.lineWidth=overlap?1.5:1;ctx.setLineDash(overlap?[4,4]:[]);
+    var dx=b[0]-a[0],dy=b[1]-a[1],d=Math.sqrt(dx*dx+dy*dy)||1,ra=l[0]===0?25:12,rb=12;
+    ctx.beginPath();ctx.moveTo(a[0]+dx/d*ra,a[1]+dy/d*ra);ctx.lineTo(b[0]-dx/d*rb,b[1]-dy/d*rb);ctx.stroke();});
+  ctx.setLineDash([]);ctx.globalAlpha=1;
+  nodes.forEach(function(n,i){var p=screen(n),r=i===0?20:8,active=i===focus;
+    ctx.globalAlpha=connected(i,focus)?1:.3;
+    if(active||i===0){ctx.strokeStyle=active?color(n):'#365769';ctx.lineWidth=1;ctx.beginPath();ctx.arc(p[0],p[1],r+5,0,Math.PI*2);ctx.stroke();}
+    ctx.beginPath();ctx.arc(p[0],p[1],r,0,Math.PI*2);ctx.fillStyle=i===0?'#193b4c':'#18283b';ctx.fill();ctx.strokeStyle=color(n);ctx.lineWidth=i===0?2:1.5;ctx.stroke();
+    ctx.fillStyle=color(n);if(i===0){ctx.font='600 12px system-ui';ctx.textAlign='center';ctx.fillText('T',p[0],p[1]+4);}else{ctx.beginPath();ctx.arc(p[0],p[1],3,0,Math.PI*2);ctx.fill();}
+    ctx.textAlign='center';ctx.fillStyle=active?'#e0ebf5':'#9fb1c7';
+    if(i===0){label('TARGET PAPER',p[0],p[1]+42,140);}else if(nodes.length<=16||active){label(n.label,p[0],p[1]-18,active?200:104);}
+  });ctx.globalAlpha=1;
+  if(nodes.length===1){ctx.textAlign='center';ctx.fillStyle='#a7b8cb';label('No citing papers in this sample',W/2,H-100,W-48);}
+  document.getElementById('graph-zoom').textContent=Math.round(zoom*100)+'%';
+  document.getElementById('graph-in').disabled=zoom>=2.5;document.getElementById('graph-out').disabled=zoom<=.5;
 }
-var hover=-1,tip=document.getElementById('tip'),dragN=null;
+function select(i){selected=i;picker.value=String(i);var n=nodes[i];
+  document.getElementById('graph-title').textContent=n.label;document.getElementById('graph-meta').textContent=n.sub;
+  document.getElementById('graph-badge').textContent=i===0?'Target paper':(n.self&&n.clique?'Self-cite + overlap':n.self?'Candidate self-cite':n.clique?'Author overlap':'Citing paper');
+  document.getElementById('graph-badge').style.color=color(n);
+  document.getElementById('graph-degree').textContent=String(links.filter(function(l){return l[0]===i||l[1]===i;}).length);
+  document.getElementById('graph-degree-label').textContent=i===0?'retrieved citing papers':'connections in this sample';draw();}
 function pos(e){var r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];}
-canvas.addEventListener('mousemove',function(e){var p=pos(e),mx=p[0],my=p[1];
-  if(dragN){dragN.mx=mx;dragN.my=my;return;}
-  hover=-1;for(var i=0;i<nodes.length;i++){var n=nodes[i],r=n.kind==='target'?15:8;
-    if((n.x-mx)*(n.x-mx)+(n.y-my)*(n.y-my)<(r+6)*(r+6)){hover=i;break;}}
-  if(hover>=0){var n2=nodes[hover];
-    tip.replaceChildren();var title=document.createElement('div'),meta=document.createElement('div');title.className='tt';meta.className='tm';title.textContent=n2.label;meta.textContent=n2.sub;tip.append(title,meta);
-    tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY+14)+'px';canvas.style.cursor='pointer';}
-  else{tip.style.display='none';canvas.style.cursor='grab';}});
-canvas.addEventListener('mouseleave',function(){hover=-1;tip.style.display='none';if(dragN){dragN.drag=false;dragN=null;}});
-canvas.addEventListener('mousedown',function(e){var p=pos(e);
-  for(var i=0;i<nodes.length;i++){var n=nodes[i],r=n.kind==='target'?15:8;
-    if((n.x-p[0])*(n.x-p[0])+(n.y-p[1])*(n.y-p[1])<(r+8)*(r+8)){dragN=n;n.drag=true;n.mx=p[0];n.my=p[1];canvas.style.cursor='grabbing';break;}}});
-window.addEventListener('mouseup',function(){if(dragN){dragN.drag=false;dragN=null;}});
-var reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-if(reduced){for(var s=0;s<400;s++)tick();draw();}
-else{(function loop(){for(var k=0;k<3;k++)tick();draw();requestAnimationFrame(loop);})();}
+function hit(p){for(var i=nodes.length-1;i>=0;i--){var s=screen(nodes[i]),r=i===0?26:16;if(Math.hypot(s[0]-p[0],s[1]-p[1])<r)return i;}return -1;}
+canvas.addEventListener('pointerdown',function(e){if(!e.isPrimary||e.button!==0)return;var p=pos(e),i=hit(p);hover=i;if(i>=0)select(i);
+  gesture={id:e.pointerId,index:i,start:p,pan:[panX,panY],node:i>=0?[nodes[i].x,nodes[i].y]:null};canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';});
+canvas.addEventListener('pointermove',function(e){var p=pos(e);if(gesture){if(e.pointerId!==gesture.id)return;
+    if(gesture.index>=0){var n=nodes[gesture.index];n.x=gesture.node[0]+(p[0]-gesture.start[0])/zoom;n.y=gesture.node[1]+(p[1]-gesture.start[1])/zoom;}
+    else{panX=gesture.pan[0]+p[0]-gesture.start[0];panY=gesture.pan[1]+p[1]-gesture.start[1];}
+  }else{hover=hit(p);canvas.style.cursor=hover>=0?'pointer':'grab';}draw();});
+function end(e){if(gesture&&gesture.id===e.pointerId){gesture=null;hover=-1;canvas.style.cursor='grab';draw();}}
+canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);canvas.addEventListener('lostpointercapture',end);
+canvas.addEventListener('pointerleave',function(){hover=-1;draw();});
+function changeZoom(delta){zoom=Math.max(.5,Math.min(2.5,Math.round((zoom+delta)*10)/10));draw();}
+function reset(){zoom=1;panX=panY=0;hover=-1;layout();select(0);}
+document.getElementById('graph-in').addEventListener('click',function(){changeZoom(.2);});
+document.getElementById('graph-out').addEventListener('click',function(){changeZoom(-.2);});
+document.getElementById('graph-reset').addEventListener('click',reset);
+picker.addEventListener('change',function(){select(Number(picker.value));});
+canvas.addEventListener('keydown',function(e){if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();select((selected+(e.key==='ArrowRight'?1:nodes.length-1))%nodes.length);}
+  else if(e.key==='+'||e.key==='='){e.preventDefault();changeZoom(.2);}else if(e.key==='-'){e.preventDefault();changeZoom(-.2);}else if(e.key==='Escape'){reset();}});
+resize();select(0);if(window.ResizeObserver){new ResizeObserver(resize).observe(canvas);}else window.addEventListener('resize',resize);
 })();
 `;
 
@@ -247,17 +296,26 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
 </div>
 
 <h2 class="sec" id="graph-section">Citation graph</h2>
-<div class="card">
-<p class="method">Edges to the target are retrieved citations. Purple edges are candidate author overlaps, not citations between papers. The paper table provides text details.</p>
-<canvas id="graph" tabindex="0" role="img" aria-label="Interactive citation graph. Center node is the target paper; surrounding nodes are citing papers."></canvas>
+<section class="graph-shell" aria-label="Citation network explorer">
+<div class="graph-toolbar"><div><div class="graph-kicker">Explore the sample</div><h3>One paper. ${citers.length} citing connections.</h3></div><div class="graph-counts"><span><strong>${nodes.length}</strong> papers</span><span><strong>${report.authorOverlaps.length}</strong> overlap pairs</span></div></div>
+<div class="graph-body"><div class="graph-stage">
+<canvas id="graph" tabindex="0" role="img" aria-label="Citation graph: target paper connected to sampled citing papers. Use left and right arrow keys to inspect papers, plus and minus to zoom, Escape to reset." aria-describedby="graph-caption"></canvas>
+<div class="graph-controls" role="group" aria-label="Graph view controls"><button type="button" id="graph-out" aria-label="Zoom out">−</button><output id="graph-zoom" aria-label="Zoom level">100%</output><button type="button" id="graph-in" aria-label="Zoom in">+</button><button type="button" id="graph-reset">Reset view</button></div>
+<div class="graph-hint">Select a paper · drag to rearrange</div>
+</div><aside class="graph-inspector" aria-label="Selected paper details">
+<div class="graph-kicker">Paper details</div><label for="graph-paper">Inspect a paper</label><select id="graph-paper"></select>
+<div aria-live="polite" aria-atomic="true"><div class="graph-badge" id="graph-badge">Target paper</div><h4 id="graph-title">${esc(t.title)}</h4><p id="graph-meta">${esc(t.authors.slice(0, 3).join(", "))}</p><div class="graph-relations"><strong id="graph-degree">${citers.length}</strong><span id="graph-degree-label">retrieved citing papers</span></div></div>
+<p class="graph-note">Connections reflect this sample only. Candidate author matches need verification.</p>
+</aside></div>
 <div class="legend">
-<span><span class="dot" style="background:#22d3ee"></span>target paper</span>
-<span><span class="dot" style="background:#475569"></span>citing paper</span>
-<span><span class="dot" style="background:#f59e0b"></span>candidate self-citation</span>
-<span><span class="dot" style="background:#a78bfa"></span>candidate author overlap</span>
-<span style="margin-left:auto">drag nodes · hover for details</span>
-</div></div>
-<div id="tip"></div>
+<span><span class="dot" style="background:#67d5e5"></span>Target</span>
+<span><span class="dot" style="background:#91a9c3"></span>Citing paper</span>
+<span><span class="dot" style="background:#edb76c"></span>Candidate self-cite</span>
+<span><span class="dot" style="background:#b5a0e8"></span>Author overlap</span>
+<span><span class="dot" style="background:#e9a4cb"></span>Both signals</span>
+<span><span class="legend-line"></span>Author-overlap edge</span>
+</div></section>
+<p class="graph-caption" id="graph-caption">Solid edges are retrieved citations to the target. Dashed purple edges are candidate author overlaps, not citations between papers. Drag empty space to pan; use the paper selector or arrow keys for details. Full metadata is in the paper table below.</p>
 
 <h2 class="sec" id="sources-section">Publication sources (including repositories)</h2>
 <div class="card">${venueRows || "<p class='meta'>No venue data.</p>"}</div>
