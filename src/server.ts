@@ -1,3 +1,4 @@
+import { DESIGN_CSS } from "./design.js";
 // Tiny web UI: enter a paper title, get the forensics dashboard.
 // No dependencies beyond node:http. Run: npm run dev, open http://localhost:3000
 import http from "node:http";
@@ -16,39 +17,29 @@ loadEnv();
 const PORT = Number(process.env.PORT ?? 3000);
 const OUT = path.join(process.cwd(), "out");
 
-const PAGE_CSS = `*{box-sizing:border-box}body{background:#0b0f17;color:#e2e8f0;font-family:ui-sans-serif,system-ui,sans-serif;margin:0}
-.wrap{max-width:640px;margin:0 auto;padding:4rem 1.25rem}
-.eyebrow{font-size:.72rem;letter-spacing:.22em;color:#22d3ee;text-transform:uppercase}
-h1{font-size:2rem;margin:.4rem 0 .6rem}p.sub{color:#94a3b8;margin-bottom:1.8rem}
-form{background:#111826;border:1px solid #1e293b;border-radius:14px;padding:1.4rem}
-label{display:block;font-size:.8rem;color:#94a3b8;margin:.9rem 0 .35rem}
-input[type=text],input[type=number]{width:100%;background:#0b0f17;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;padding:.7rem .9rem;font-size:1rem}
-input:focus-visible,button:focus-visible{outline:2px solid #22d3ee;outline-offset:2px}
-.row{display:flex;gap:1rem}.row>div{flex:1}
-button{margin-top:1.2rem;width:100%;background:#22d3ee;color:#06202a;border:none;border-radius:8px;padding:.8rem;font-size:1rem;font-weight:700;cursor:pointer}
-button:hover{background:#67e8f9}button:disabled{opacity:.5;cursor:wait}
-.hint{margin-top:1rem;font-size:.8rem;color:#64748b}
-.err{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.4);color:#fca5a5;border-radius:8px;padding:.8rem;margin-bottom:1rem}`;
+const PAGE_CSS = DESIGN_CSS;
 
 function landing(error?: string): string {
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Scholar Forensics</title><style>${PAGE_CSS}</style></head>
 <body><div class="wrap">
-<div class="eyebrow">Citation cartel screening</div>
-<h1>Look beyond citation counts.</h1>
-<p class="sub">Get an overall assessment backed by retraction records, reference-list concentration, and citation cycles between candidate author teams.</p>
-${error ? `<div class="err">${escape(error)}</div>` : ""}
+<header class="site-header"><a class="brand" href="/"><span class="brand-mark" aria-hidden="true">s</span> Scholar Forensics</a><span class="header-note">A closer look at research</span><a class="new-search" href="#method">How it works &#8599;</a></header>
+<main class="landing-layout"><section class="intro"><div class="eyebrow">Citation cartel screening</div>
+<h1>Good research.<br><em>Look closer.</em></h1>
+<p class="sub">Citation counts tell one story. Explore the authors, sources, and connections behind a paper to see the fuller picture.</p>
+<div class="research-note"><strong>01 /</strong><p>Start with a paper. Follow the evidence.<br>Built for a more considered reading of research.</p></div></section>
+<section class="search-panel" aria-labelledby="search-title"><h2 class="form-heading" id="search-title">Investigate a paper</h2><p class="form-sub">Enter its title to begin your evidence check.</p>
+${error ? `<div class="err" role="alert">${escape(error)}</div>` : ""}
 <form method="POST" action="/analyze" onsubmit="document.getElementById('go').disabled=true;document.getElementById('go').textContent='Checking citations and retractions…'">
-<label for="q">Paper title</label>
-<input type="text" id="q" name="q" placeholder="Attention Is All You Need" required autocomplete="off">
-<div class="row"><div><label for="max">Citer sample size (5–100, first returned results)</label><input type="number" id="max" name="max" value="60" min="5" max="100" required></div></div>
-<label for="llm"><input type="checkbox" id="llm" name="llm" value="1"> Include AI interpretation · Groq / ${escape(process.env.GROQ_MODEL?.trim() || DEFAULT_MODEL)}</label>
-<p class="hint">Optional: sends compact public metadata for up to 100 citers and calculated evidence to Groq. One paid request, with one smaller retry only for size or output truncation (at most two requests). No full papers or citation passages are read. AI cannot change the assessment.</p>
-<p class="hint">Default: 60 citers; hard cap: 100. Even highly cited papers get a sample assessment. Incomplete reference checks are reported separately.</p>
-<p class="hint">Includes a public Crossref metadata check: target, up to 20 sampled citers and 12 target references. No extra API key required. Sends public paper titles/DOIs; may add up to 45 seconds. Grades are screening signals, not proof of collusion.</p>
-<button id="go" type="submit">Assess this paper</button>
-</form>
-<p class="hint">Costs ~1 SerpApi search to resolve + ~1 per 20 citers. Keys stay server-side and are sent only to their respective API providers, never included in reports.</p>
+<label class="field-label" for="q">Paper title</label><input type="text" id="q" name="q" placeholder="e.g. Attention Is All You Need" required autocomplete="off">
+<div class="sample-row"><div><label class="field-label" for="max">Sample size</label><input type="number" id="max" name="max" value="60" min="5" max="100" required aria-describedby="sample-note"></div><p class="sample-note" id="sample-note">5–100 citing papers.<br>First returned Scholar results.</p></div>
+<div class="ai-option"><label for="llm"><input type="checkbox" id="llm" name="llm" value="1"> Include AI interpretation</label><p class="hint">Optional commentary from Groq / ${escape(process.env.GROQ_MODEL?.trim() || DEFAULT_MODEL)}. AI cannot change the assessment.</p></div>
+<button id="go" type="submit"><span>Assess this paper</span><span aria-hidden="true">&#8594;</span></button>
+<p class="hint">A bounded sample, with public Crossref reference and retraction checks. This may add up to 45 seconds.</p>
+<details class="disclosures"><summary>Data, costs &amp; limitations</summary><p class="hint">Default: 60 citers; hard cap: 100. Even highly cited papers get a sample assessment. Incomplete reference checks are reported separately. Grades are screening signals, not proof of collusion.</p><p class="hint">Crossref checks the target, up to 20 sampled citers and 12 target references. Public paper titles and DOIs are sent to Crossref. No extra API key required.</p><p class="hint">Enabling AI sends compact public metadata for up to 100 citers and calculated evidence to Groq. One paid request, with one smaller retry only for size or output truncation (at most two requests). No full papers or citation passages are read.</p><p class="hint">Costs ~1 SerpApi search to resolve + ~1 per 20 citers. Keys stay server-side and are sent only to their respective API providers, never included in reports.</p></details>
+</form></section></main>
+<section class="method-strip" id="method" aria-label="How it works"><div class="method-step"><span class="step-number">01</span><div><h2>Find the paper</h2><p>Resolve your title on Google Scholar and retrieve a bounded citation sample.</p></div></div><div class="method-step"><span class="step-number">02</span><div><h2>Trace the patterns</h2><p>Explore candidate author matches, publication sources, and reference networks.</p></div></div><div class="method-step"><span class="step-number">03</span><div><h2>Read the evidence</h2><p>Review an assessment with linked sources and clearly stated limitations.</p></div></div></section>
+<footer class="foot">Google Scholar via SerpApi &nbsp; / &nbsp; Crossref metadata &nbsp; / &nbsp; Evidence before conclusions</footer>
 </div></body></html>`;
 }
 

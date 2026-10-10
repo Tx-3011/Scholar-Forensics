@@ -1,3 +1,4 @@
+import { DESIGN_CSS, SITE_HEADER } from "./design.js";
 // Interactive single-file dashboard. No external dependencies —
 // everything is inline so out/report.html works from file:// too.
 import type { ForensicsReport } from "./analyze.js";
@@ -26,104 +27,7 @@ function renderInterpretation(ai?: Interpretation): string {
   <details style="margin-top:1rem"><summary>Evidence catalog and provenance</summary><p class="method">Prompt: ${esc(ai.promptVersion ?? "")} · tokens: ${ai.usage?.promptTokens ?? 0} input / ${ai.usage?.completionTokens ?? 0} output</p>${(ai.evidence ?? []).map((e) => `<div id="evidence-${esc(e.id)}" style="margin-top:1rem"><strong>${esc(e.id)}: ${esc(e.title)}</strong>${safeUrl(e.url) ? ` · <a href="${safeUrl(e.url)}" target="_blank" rel="noopener noreferrer">Source</a>` : ""}<pre style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.8rem">${esc(JSON.stringify(e.detail, null, 2))}</pre></div>`).join("")}</details></div>`;
 }
 
-const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
-:root{--bg:#0F172A;--panel:rgba(27,35,54,.72);--panel2:#0e1420;--line:rgba(255,255,255,.09);--txt:#F8FAFC;--mut:#94A3B8;--cy:#22d3ee;--gn:#22C55E;--am:#f59e0b;--rd:#ef4444}
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--txt);font-family:"Fira Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.5;min-height:100vh}
-.mono,h1,.stat .v{font-family:"Fira Code",ui-monospace,SFMono-Regular,Menlo,monospace}
-.wrap{max-width:1060px;margin:0 auto;padding:2rem 1.25rem 4rem}
-.eyebrow{font-size:.72rem;letter-spacing:.22em;color:var(--cy);text-transform:uppercase;margin-bottom:.4rem}
-h1{font-size:1.65rem;line-height:1.25;font-weight:600;max-width:46rem;letter-spacing:-.01em}
-.meta{color:var(--mut);margin-top:.5rem;font-size:.92rem}
-.card{background:var(--panel);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.25rem;box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 12px 32px rgba(0,0,0,.35);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
-.card:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 16px 40px rgba(0,0,0,.45)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1.6rem}
-@media(max-width:760px){.stats{grid-template-columns:1fr}}
-.stat .k{font-size:.75rem;color:var(--mut);text-transform:uppercase;letter-spacing:.1em}
-.stat .v{font-size:1.7rem;font-weight:600;margin-top:.2rem;font-variant-numeric:tabular-nums}
-.stat .d{font-size:.82rem;color:var(--mut);margin-top:.15rem}
-h2.sec{font-size:1.05rem;margin:2rem 0 .8rem;display:flex;align-items:center;gap:.6rem;font-weight:600}
-h2.sec::after{content:"";flex:1;height:1px;background:var(--line)}
-.graph-shell{isolation:isolate;border:1px solid #2b3a50;border-radius:16px;overflow:hidden;background:#111c2c}
-.graph-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 24px;border-bottom:1px solid #2b3a50;flex-wrap:wrap}
-.graph-kicker{font-size:.68rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#91a6bf;margin-bottom:4px}
-.graph-toolbar h3{font-size:1.1rem;font-weight:500;letter-spacing:-.02em}
-.graph-counts{display:flex;gap:16px;font-size:.75rem;color:#91a6bf;font-variant-numeric:tabular-nums}.graph-counts strong{color:#dce7f3;font-weight:500}
-.graph-body{display:grid;grid-template-columns:minmax(0,1fr) 264px}
-.graph-stage{position:relative;min-width:0;background:#0e1725;isolation:isolate}
-#graph{width:100%;height:520px;cursor:grab;display:block;touch-action:none}
-#graph:focus-visible{outline:2px solid var(--cy);outline-offset:-4px}
-.graph-controls{position:absolute;bottom:20px;left:20px;display:flex;align-items:center;gap:4px;background:#172437;border:1px solid #34455d;border-radius:8px;padding:4px;z-index:1}
-.graph-controls button{background:transparent;border:0;color:#cfdeee;border-radius:4px;min-width:32px;height:32px;font-family:inherit;font-size:.85rem;font-weight:500;padding:0 8px;transition:background-color 150ms ease,color 150ms ease}
-.graph-controls button:hover{background:#2c4058;color:#f1f5f9}.graph-controls button:active{background:#385470}.graph-controls button:disabled{opacity:.35;cursor:not-allowed}
-.graph-controls output{font-size:.7rem;color:#9fb1c7;min-width:44px;text-align:center;font-variant-numeric:tabular-nums}
-.graph-hint{position:absolute;right:20px;bottom:32px;font-size:.68rem;color:#91a6bf;pointer-events:none}
-.graph-inspector{padding:24px;border-left:1px solid #2b3a50;background:#142032;overflow-wrap:anywhere}
-.graph-inspector label{display:block;font-size:.7rem;color:#9fb1c7;margin:16px 0 8px}
-.graph-inspector select{width:100%;min-height:36px;padding:8px;background:#1c2c41;color:#dce7f3;border:1px solid #3a4d65;border-radius:6px;font:inherit;font-size:.75rem;cursor:pointer}
-.graph-inspector select:hover{border-color:#69829e}
-.graph-badge{display:inline-block;border:1px solid #365e70;background:#193345;color:#7ddde9;padding:4px 8px;border-radius:4px;font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin:24px 0 12px}
-.graph-inspector h4{font-size:1rem;font-weight:500;line-height:1.5;letter-spacing:-.01em;margin-bottom:12px}
-.graph-inspector p{font-size:.78rem;color:#a7b8cb;line-height:1.6}
-.graph-relations{margin:24px 0;padding:16px 0;border-top:1px solid #2b3a50;border-bottom:1px solid #2b3a50}.graph-relations strong{display:block;font-size:1.5rem;font-weight:500;color:#e1ebf5;font-variant-numeric:tabular-nums}.graph-relations span{font-size:.72rem;color:#9fb1c7}
-.graph-inspector .graph-note{font-size:.7rem;color:#91a6bf}
-.legend{display:flex;gap:12px 20px;flex-wrap:wrap;padding:16px 24px;border-top:1px solid #2b3a50;font-size:.7rem;color:#a7b8cb}
-.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:baseline}
-.legend-line{display:inline-block;width:16px;border-top:2px dashed #b5a0e8;margin-right:8px;vertical-align:middle}
-.graph-caption{margin-top:12px;font-size:.75rem;color:#9fb1c7;max-width:85ch}
-@media(max-width:760px){.graph-body{grid-template-columns:1fr}.graph-inspector{border-left:0;border-top:1px solid #2b3a50;padding:20px}.graph-toolbar{padding:20px}.graph-hint{display:none}#graph{height:420px}.graph-badge{margin-top:16px}.graph-relations{margin:16px 0;padding:12px 0}.legend{padding:16px 20px}}
-.vrow{display:flex;align-items:center;gap:.7rem;margin:.4rem 0}
-.vlabel{width:16rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.86rem}
-.vtrack{flex:1;height:.65rem;background:rgba(255,255,255,.06);border-radius:99px;overflow:hidden}
-.vfill{height:100%;background:linear-gradient(90deg,#16a34a,var(--gn));border-radius:99px;transition:width .6s ease}
-.vval{width:3rem;text-align:right;color:var(--mut);font-size:.85rem;font-variant-numeric:tabular-nums;font-family:"Fira Code",monospace}
-table{width:100%;border-collapse:collapse;font-size:.88rem}
-th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid var(--line)}
-th{color:var(--mut);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}
-tbody tr{transition:background .15s ease}tbody tr:hover{background:rgba(255,255,255,.03)}
-.yrow{display:flex;align-items:center;gap:.6rem;margin:.22rem 0}
-.ylabel{width:3.4rem;color:var(--mut);font-size:.85rem;font-variant-numeric:tabular-nums;font-family:"Fira Code",monospace}
-.ybar{height:.9rem;background:linear-gradient(90deg,#16a34a,var(--gn));border-radius:3px;min-width:2px}
-.yval{color:var(--mut);font-size:.85rem}
-.notes{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.3)}
-.notes li{margin:.3rem 0 .3rem 1.1rem;font-size:.9rem}
-ul.plain{list-style:none}ul.plain li{padding:.45rem 0;border-bottom:1px solid var(--line);font-size:.9rem}
-ul.plain li:last-child{border-bottom:none}
-.tag{display:inline-block;font-size:.68rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border-radius:99px;padding:.12rem .55rem;margin-left:.5rem;vertical-align:middle}
-.tag.self{color:var(--am);background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4)}
-.tag.clique{color:var(--cy);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.35)}
-.foot{margin-top:2.5rem;color:var(--mut);font-size:.78rem;text-align:center}
-.method{font-size:.85rem;color:var(--mut)}
-.finding{isolation:isolate;background:#172334;border:1px solid #365066;border-left:5px solid var(--cy);border-radius:14px;margin-top:1.5rem;padding:1.6rem}
-.finding.attention{border-left-color:var(--am)}
-.finding.retracted,.finding.strong{border-left-color:#f87171;background:#291e2a}
-.finding.possible,.finding.review{border-left-color:var(--am)}
-.finding.fine{border-left-color:var(--gn)}
-.finding.insufficient{border-left-color:var(--mut)}
-.assessment-reasons{padding-left:1.25rem;margin:.8rem 0}.assessment-reasons li{margin:.5rem 0}
-.assessment-action{margin-top:1rem;font-weight:600}.check-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;margin-top:1rem}
-.finding .finding-label{color:var(--cy);font-size:.75rem;text-transform:uppercase;letter-spacing:.12em;font-weight:600}
-.finding.attention .finding-label{color:#fbbf24}
-.finding h2{font-size:clamp(1.6rem,4vw,2.6rem);line-height:1.15;letter-spacing:-.03em;max-width:850px;margin:.65rem 0 1rem;text-wrap:balance}
-.finding p{max-width:850px}
-.finding .finding-evidence{font-size:1.15rem;font-weight:600;color:#e2e8f0;margin-bottom:.5rem}
-.finding-context{margin-top:.75rem;color:var(--mut);font-size:.82rem}
-.finding details{margin-top:.65rem;font-size:.85rem;color:#cbd5e1}
-@media(max-width:760px){.finding{padding:1.1rem;margin-top:1rem}.finding h2{font-size:1.75rem}.finding .finding-evidence{font-size:1rem}.finding-actions{gap:.5rem 1rem}}
-.finding-actions{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem}
-.finding-actions a{font-weight:600;font-size:.9rem}
-.finding-caveat{margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--line);font-size:.85rem;color:#cbd5e1}
-.verdict.neutral{color:#cbd5e1;background:#1e293b;border:1px solid #475569}
-a:focus-visible,summary:focus-visible{outline:2px solid var(--cy);outline-offset:4px}
-.method code{color:var(--txt);background:rgba(255,255,255,.06);padding:.1rem .35rem;border-radius:4px;font-size:.8rem;font-family:"Fira Code",monospace}
-a{color:var(--cy)}button{cursor:pointer}
-:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
-@media (prefers-reduced-motion: reduce){
-  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
-  .card:hover{transform:none}
-}
-`;
+const CSS = DESIGN_CSS;
 
 const GRAPH_JS = `
 (function(){
@@ -157,8 +61,8 @@ function connected(i,focus){return i===focus||links.some(function(l){return (l[0
 function label(text,x,y,max){ctx.font='11px "Fira Sans",system-ui';while(text.length>1&&ctx.measureText(text).width>max){text=text.slice(0,-2)+'…';}ctx.fillText(text,x,y);}
 function draw(){
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
-  ctx.fillStyle='#223044';for(var x=16;x<W;x+=24)for(var y=16;y<H;y+=24){ctx.beginPath();ctx.arc(x,y,.7,0,Math.PI*2);ctx.fill();}
-  var center=screen(nodes[0]);ctx.strokeStyle='#223044';ctx.lineWidth=1;ctx.setLineDash([3,7]);ctx.beginPath();ctx.arc(center[0],center[1],Math.min(W,H)*.34*zoom,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='#2b4134';for(var x=16;x<W;x+=24)for(var y=16;y<H;y+=24){ctx.beginPath();ctx.arc(x,y,.7,0,Math.PI*2);ctx.fill();}
+  var center=screen(nodes[0]);ctx.strokeStyle='#2b4134';ctx.lineWidth=1;ctx.setLineDash([3,7]);ctx.beginPath();ctx.arc(center[0],center[1],Math.min(W,H)*.34*zoom,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
   var focus=hover>=0?hover:selected;
   links.forEach(function(l){var a=screen(nodes[l[0]]),b=screen(nodes[l[1]]),overlap=l[3]==='clique',active=l[0]===focus||l[1]===focus;
     ctx.globalAlpha=active?1:.25;ctx.strokeStyle=overlap?'#b5a0e8':(focus===0?'#3a5068':'#6c9bae');ctx.lineWidth=overlap?1.5:1;ctx.setLineDash(overlap?[4,4]:[]);
@@ -168,7 +72,7 @@ function draw(){
   nodes.forEach(function(n,i){var p=screen(n),r=i===0?20:8,active=i===focus;
     ctx.globalAlpha=connected(i,focus)?1:.3;
     if(active||i===0){ctx.strokeStyle=active?color(n):'#365769';ctx.lineWidth=1;ctx.beginPath();ctx.arc(p[0],p[1],r+5,0,Math.PI*2);ctx.stroke();}
-    ctx.beginPath();ctx.arc(p[0],p[1],r,0,Math.PI*2);ctx.fillStyle=i===0?'#193b4c':'#18283b';ctx.fill();ctx.strokeStyle=color(n);ctx.lineWidth=i===0?2:1.5;ctx.stroke();
+    ctx.beginPath();ctx.arc(p[0],p[1],r,0,Math.PI*2);ctx.fillStyle=i===0?'#244837':'#20392e';ctx.fill();ctx.strokeStyle=color(n);ctx.lineWidth=i===0?2:1.5;ctx.stroke();
     ctx.fillStyle=color(n);if(i===0){ctx.font='600 12px system-ui';ctx.textAlign='center';ctx.fillText('T',p[0],p[1]+4);}else{ctx.beginPath();ctx.arc(p[0],p[1],3,0,Math.PI*2);ctx.fill();}
     ctx.textAlign='center';ctx.fillStyle=active?'#e0ebf5':'#9fb1c7';
     if(i===0){label('TARGET PAPER',p[0],p[1]+42,140);}else if(nodes.length<=16||active){label(n.label,p[0],p[1]-18,active?200:104);}
@@ -264,7 +168,7 @@ export function renderDashboard(report: ForensicsReport, citers: ScholarPaper[],
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Forensics — ${esc(t.title.slice(0, 60))}</title><style>${CSS}</style></head>
-<body><div class="wrap">
+<body><div class="wrap">${SITE_HEADER}
 <div class="eyebrow">Scholar citation-pattern explorer</div>
 <h1>${esc(t.title)}</h1>
 <p class="meta">${esc(t.authors.join(", "))}${t.year ? " · " + t.year : ""}${t.venue ? " · " + esc(t.venue) : ""}${t.citedByTotal !== undefined ? ` · ~${t.citedByTotal.toLocaleString()} citations` : ""}</p>
