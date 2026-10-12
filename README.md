@@ -10,6 +10,9 @@ risk probability, or a certification that a paper is reliable.** Citation cycles
 author overlap, self-citation, and source concentration can all have legitimate
 explanations.
 
+<img width="1887" height="1177" alt="image" src="https://github.com/user-attachments/assets/3cf4334b-6286-4d40-aaad-a0f9ee91be9c" />
+
+
 ## Run the web app
 
 Requirements: Node.js and npm.
